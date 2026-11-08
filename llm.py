@@ -60,6 +60,26 @@ def _client():
     return _CLIENT
 
 
+def _generate(**kw):
+    """Gemini 호출. 일시 과부하(503)·사용량 초과(429)는 재시도 후 다른 경량 모델로 대체."""
+    import time
+    from google.genai import errors
+    models = [kw.pop("model")] + [m for m in FALLBACK_MODELS]
+    last = None
+    for m in dict.fromkeys(models):
+        for attempt in range(2):
+            try:
+                return _client().models.generate_content(model=m, **kw)
+            except (errors.ServerError, errors.ClientError) as e:
+                if getattr(e, "code", None) not in (429, 500, 503):
+                    raise
+                last = e
+                time.sleep(2 * (attempt + 1))
+    raise last
+
+
+FALLBACK_MODELS = ["gemini-3.5-flash-lite", "gemini-flash-lite-latest"]
+
 def _model(model):
     return model or os.environ.get("GEMINI_MODEL", DEFAULT_MODEL)
 
@@ -70,7 +90,7 @@ def classify_items(objects: list[dict], model: str | None = None) -> dict:
               + "\n\n[예시]\n" + p["examples"])
     payload = [{"id": o["id"], "label": o["label"], **({"hint": o["hint"]} if o.get("hint") else {})}
                for o in objects]
-    resp = _client().models.generate_content(
+    resp = _generate(
         model=_model(model),
         contents="입력:\n" + json.dumps(payload, ensure_ascii=False),
         config=types.GenerateContentConfig(
@@ -144,7 +164,7 @@ def verify_ambiguous(image, objects: list[dict], result: dict, model: str | None
         "3) sure: 이미지로 확실히 판단되면 true.\n"
         '출력은 JSON 만: {"results":[{"n":번호,"name":"...","fixed":false,"sure":true}]}'
     )
-    resp = _client().models.generate_content(
+    resp = _generate(
         model=_model(model), contents=[instruction, *parts],
         config=types.GenerateContentConfig(temperature=0.1, response_mime_type="application/json"),
     )
@@ -177,3 +197,47 @@ def verify_ambiguous(image, objects: list[dict], result: dict, model: str | None
     result["items"] = list(merged.values())
     result["verified"] = verified
     return result
+
+
+def find_missing(image, result: dict, objects: list[dict], model: str | None = None) -> tuple[list[dict], list[dict]]:
+    """Florence 가 놓친 판매 가능 장비를 Gemini 가 사진 전체를 1회 보고 보완 (박스 포함).
+    반환: (새 물체 목록, 새 품목 목록). 이미 찾은 품목 이름은 제외해 중복을 막는다."""
+    found = sorted({it["name"] for it in result["items"]})
+    p = load_prompt()
+    img = image.copy()
+    img.thumbnail((1024, 1024))
+    buf = io.BytesIO()
+    img.convert("RGB").save(buf, "JPEG", quality=85)
+    instruction = (
+        "폐업 매장 사진이다. 아래 '이미 찾은 품목' 외에, 중고로 팔 수 있는 업소용 장비·가구·가전 중 "
+        "사진에 분명히 보이는데 빠진 것만 찾아라. 사람·건물·고정된 카운터·소모품·음식·장식은 제외. "
+        "보이지 않는 물건은 절대 추가하지 말 것.\n"
+        f"이미 찾은 품목: {', '.join(found) or '없음'}\n"
+        f"품목 이름은 가능하면 다음 사전에서: {p['dictionary']}\n"
+        '물건 하나마다 box_2d=[ymin,xmin,ymax,xmax] (0~1000 정규화). JSON 만: '
+        '{"items":[{"name":"...","box_2d":[0,0,0,0]}]}'
+    )
+    resp = _generate(
+        model=_model(model), contents=[instruction, types.Part.from_bytes(data=buf.getvalue(), mime_type="image/jpeg")],
+        config=types.GenerateContentConfig(temperature=0.1, response_mime_type="application/json"),
+    )
+    out = json.loads(resp.text)
+    if isinstance(out, list):
+        out = {"items": out}
+    W, H = image.size
+    next_id = max((o["id"] for o in objects), default=-1) + 1
+    new_objs, groups = [], {}
+    for it in out.get("items", []):
+        name, b = str(it.get("name", "")).strip(), it.get("box_2d")
+        if not name or name in found or not (isinstance(b, list) and len(b) == 4):
+            continue  # 박스 근거가 없거나 이미 찾은 품목이면 버림
+        y1, x1, y2, x2 = [float(v) for v in b]
+        box = [x1 * W / 1000, y1 * H / 1000, x2 * W / 1000, y2 * H / 1000]
+        if box[2] - box[0] < 8 or box[3] - box[1] < 8:
+            continue
+        new_objs.append({"id": next_id, "label": name, "box": [round(v, 1) for v in box], "task": "GEMINI"})
+        groups.setdefault(name, []).append(next_id)
+        next_id += 1
+    new_items = [{"name": n, "count": len(ids), "source_ids": ids, "in_dictionary": n in p["dictionary"],
+                  "uncertain": True, "category": "집기", "note": "AI 보완 탐지"} for n, ids in groups.items()]
+    return new_objs, new_items
