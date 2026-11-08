@@ -22,6 +22,7 @@ VOCAB = [
     "display case", "blender", "oven", "microwave", "dishwasher", "sink", "table",
     "chair", "stool", "sofa", "shelf", "cabinet", "cash register", "monitor",
     "air conditioner", "fan", "lamp", "mirror", "television",
+    "coffee machine", "water dispenser", "under-counter refrigerator", "showcase refrigerator", "card terminal",
 ]
 
 # 코드 1차 제외 목록: 사람·건물 구조·배경. 대표 단어만 두고 나머지는 LLM 이 2차로 거른다.
@@ -142,4 +143,74 @@ def code_filter(objects: list[dict], image_size: tuple[int, int]) -> tuple[list[
             dropped.append({**o, "reason": "중복"})
         else:
             kept.append(o)
+    kept, more = _drop_contained(kept)
+    dropped += more
+    _mark_fixed(kept, w, h)
     return kept, dropped
+
+
+def _family(label: str) -> str:
+    """같은 물건 계열로 묶기 위한 대표 단어 (예: 'pendant lamp' -> 'lamp')."""
+    words = label.lower().split()
+    for fam in FAMILIES:
+        if fam in words or fam in label.lower():
+            return fam
+    return words[-1] if words else label
+
+
+FAMILIES = ["lamp", "light", "chair", "stool", "table", "vase", "flower", "plant", "refrigerator", "fridge",
+            "cabinet", "shelf", "machine", "grinder", "monitor", "sofa"]
+
+
+def _inside(small, big) -> float:
+    """small 박스 면적 중 big 박스 안에 들어간 비율."""
+    x1, y1, x2, y2 = max(small[0], big[0]), max(small[1], big[1]), min(small[2], big[2]), min(small[3], big[3])
+    inter = max(0, x2 - x1) * max(0, y2 - y1)
+    area = max(1e-6, (small[2] - small[0]) * (small[3] - small[1]))
+    return inter / area
+
+
+def _drop_contained(objs: list[dict]) -> tuple[list[dict], list[dict]]:
+    """포함 관계 중복 제거 (IoU 로는 안 잡히는 경우).
+    - 큰 박스가 같은 계열 작은 박스를 2개 이상 품으면: 큰 박스는 '묶음 박스' → 큰 박스 제거
+    - 1개만 품으면: 같은 물건을 두 번 잡은 것 → 작은 박스 제거
+    - 같은 계열끼리 IoU 0.7 이상: 중복 → 나중 것 제거"""
+    drop = set()
+    for i, big in enumerate(objs):
+        inner = [j for j, s in enumerate(objs) if j != i and _family(s["label"]) == _family(big["label"])
+                 and _inside(s["box"], big["box"]) >= 0.8 and _area(s["box"]) < _area(big["box"])]
+        if len(inner) >= 2:
+            drop.add(i)
+        elif len(inner) == 1:
+            drop.add(inner[0])
+    for i, a in enumerate(objs):
+        for j in range(i + 1, len(objs)):
+            if i not in drop and j not in drop and _family(a["label"]) == _family(objs[j]["label"]) \
+                    and _iou(a["box"], objs[j]["box"]) >= 0.7:
+                drop.add(j)
+    kept = [o for k, o in enumerate(objs) if k not in drop]
+    dropped = [{**o, "reason": "포함·겹침 중복"} for k, o in enumerate(objs) if k in drop]
+    return kept, dropped
+
+
+def _area(b):
+    return max(0, b[2] - b[0]) * max(0, b[3] - b[1])
+
+
+FIXED_WORDS = ["counter", "cabinet", "cupboard", "lamp", "light", "chandelier", "shelf", "sink", "bar"]
+
+
+def _mark_fixed(objs: list[dict], w: int, h: int) -> None:
+    """고정 설비 의심 표시 (제거하지 않고 hint 만 붙임 → LLM 이 uncertain 처리, 사용자가 최종 확인).
+    - 사진 면적 35% 이상
+    - 폭 60% 이상인데 높이가 낮은 가로 띠 (카운터·하부장)
+    - 조명·선반 계열이 사진 위쪽 5% 에 닿음 (천장·벽에 매달림)"""
+    for o in objs:
+        x1, y1, x2, y2 = o["box"]
+        bw, bh = x2 - x1, y2 - y1
+        label = o["label"].lower()
+        big = bw * bh >= 0.35 * w * h
+        band = bw >= 0.6 * w and bh <= 0.45 * h and any(f in label for f in FIXED_WORDS)
+        hanging = y1 <= 0.05 * h and any(f in label for f in ["lamp", "light", "chandelier", "shelf"])
+        if big or band or hanging:
+            o["hint"] = "fixed_suspect"

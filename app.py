@@ -148,6 +148,11 @@ if file is not None:
                 st.error("AI 판별 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.")
                 st.caption(type(e).__name__)
                 st.stop()
+        with st.spinner("③ 헷갈리는 장비만 이미지로 다시 확인하는 중 (Gemini)..."):
+            try:
+                result = llm.verify_ambiguous(image, kept, result)
+            except Exception:
+                result["verified"] = []  # 재확인 실패 시 1차 판별 결과를 그대로 사용
         st.session_state.last = {"key": key, "image": image, "det": det, "kept": kept, "dropped": dropped,
                                  "result": result}
         st.rerun()
@@ -165,8 +170,9 @@ if last:
                + (" · ⚠ 물체가 많아 일부 누락 가능 (나눠 찍기 권장)" if last["det"]["truncated"] else ""))
 
     if items:
-        df = pd.DataFrame([{"품목": it["name"], "수량": it["count"],
-                            "확인 필요": "예" if it["uncertain"] or not it["in_dictionary"] else ""}
+        items = sorted(items, key=lambda it: it.get("category") == "기타")  # 기타(장식·소품)는 아래로
+        df = pd.DataFrame([{"품목": it["name"], "수량": it["count"], "분류": it.get("category", "집기"),
+                            "확인 필요": it.get("note") or ("예" if it["uncertain"] or not it["in_dictionary"] else "")}
                            for it in items])
         st.write("틀린 품목·수량은 표에서 바로 고칠 수 있습니다.")
         edited = st.data_editor(df, num_rows="dynamic", use_container_width=True, key="editor")
@@ -198,6 +204,8 @@ if last:
         st.dataframe(pd.DataFrame(last["dropped"]), use_container_width=True, hide_index=True)
         st.write("**Gemini 2차 판별에서 제외**")
         st.dataframe(pd.DataFrame(last["result"]["excluded"]), use_container_width=True, hide_index=True)
+        st.write("**이미지 재확인으로 바뀐 이름·고정 여부**")
+        st.dataframe(pd.DataFrame(last["result"].get("verified", [])), use_container_width=True, hide_index=True)
 
 st.divider()
 st.caption("시세는 참고용이며 실제 거래가와 다를 수 있습니다. 올린 사진은 저장하지 않습니다.")
