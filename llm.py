@@ -77,6 +77,8 @@ def classify_items(objects: list[dict], model: str | None = None) -> dict:
             system_instruction=system, temperature=0.1, response_mime_type="application/json"),
     )
     data = json.loads(resp.text)
+    if isinstance(data, list):  # 모델이 가끔 목록만 돌려주는 경우 형식 보정
+        data = {"items": data, "excluded": []}
     return validate(data, {o["id"] for o in objects})
 
 
@@ -147,7 +149,10 @@ def verify_ambiguous(image, objects: list[dict], result: dict, model: str | None
         config=types.GenerateContentConfig(temperature=0.1, response_mime_type="application/json"),
     )
     verified = []
-    for r in json.loads(resp.text).get("results", []):
+    out = json.loads(resp.text)
+    if isinstance(out, list):  # 형식 보정
+        out = {"results": out}
+    for r in out.get("results", []):
         n = r.get("n")
         if not isinstance(n, int) or not 0 <= n < len(meta):
             continue
