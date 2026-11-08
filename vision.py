@@ -1,4 +1,4 @@
-"""Florence-2-base 탐지 + 코드 1차 필터."""
+"""Florence-2-base 탐지 + 코드 1차 필터 (카페 전문장비·카운터 인식 강화 버전)."""
 from __future__ import annotations
 
 import os
@@ -16,14 +16,30 @@ from transformers.dynamic_module_utils import get_imports
 MODEL_ID = "microsoft/Florence-2-base"
 MAX_SIDE = 1024  # 큰 사진은 줄여서 CPU 시간 단축
 
-# phrase grounding 에 넣는 찾을 품목 (영어). Florence 는 영어 라벨을 낸다.
+# 1. 카페 핵심 장비 & 카운터 위주로 단어장 개편 (중요도 순 배치)
 VOCAB = [
-    "espresso machine", "coffee grinder", "ice maker", "refrigerator", "freezer",
-    "display case", "blender", "oven", "microwave", "dishwasher", "sink", "table",
-    "chair", "stool", "sofa", "shelf", "cabinet", "cash register", "monitor",
+    # 커피·음료 제조 핵심 장비
+    "espresso machine", "coffee machine", "coffee grinder", "ice maker",
+    "blender", "water dispenser",
+    # 냉장·보관·진열·조리 장비
+    "display case", "pastry display", "refrigerator", "freezer",
+    "oven", "microwave", "dishwasher", "sink",
+    # 카운터·결제·매장 설비
+    "counter", "bar counter", "cash register", "pos terminal", "kiosk", "monitor",
+    # 홀 가구·냉난방·기타 집기
+    "table", "chair", "stool", "sofa", "shelf", "cabinet",
     "air conditioner", "fan", "lamp", "mirror", "television",
-    "coffee machine", "water dispenser", "under-counter refrigerator", "showcase refrigerator", "card terminal",
+    # (승우 추가) 매립형 냉장고·쇼케이스 냉장고·카드 단말기
+    "under-counter refrigerator", "showcase refrigerator", "card terminal",
 ]
+
+# 카페 핵심 장비 목록 (검증 완화 및 소형 크기 보호 대상)
+CAFE_PRIORITY_LABELS = {
+    "espresso machine", "coffee machine", "coffee grinder", "ice maker",
+    "blender", "water dispenser", "display case", "pastry display",
+    "counter", "bar counter", "cash register", "pos terminal", "kiosk",
+    "sink", "oven", "microwave", "refrigerator", "freezer",
+}
 
 # 코드 1차 제외 목록: 사람·건물 구조·배경. 대표 단어만 두고 나머지는 LLM 이 2차로 거른다.
 BLOCK_WORDS = [
@@ -31,7 +47,8 @@ BLOCK_WORDS = [
     "wall", "floor", "ceiling", "window", "door", "pillar", "stairs", "building",
     "sky", "tree", "grass", "text", "shadow", "light", "reflection",
 ]
-MIN_AREA_RATIO = 0.003  # 사진 면적의 0.3% 미만 박스는 잡음으로 제외
+MIN_AREA_RATIO = 0.003          # 일반 물체 최소 면적 비율 (0.3%)
+MIN_PRIORITY_AREA_RATIO = 0.0012  # 그라인더·블렌더·포스기 등 소형 핵심 장비 최소 면적 비율 (0.12%)
 
 
 def _no_flash_attn(filename):
@@ -69,7 +86,7 @@ def _run(model, processor, image, task, text=""):
 
 
 def detect(model, processor, image: Image.Image, use_grounding: bool = True) -> dict:
-    """<OD> 와 (선택) 품목 사전 grounding 결과를 합친다."""
+    """<OD> 와 품목 사전 grounding 결과를 합친다."""
     t0 = time.time()
     objs, truncated = [], False
     labels, boxes, tr = _run(model, processor, image, "<OD>")
@@ -79,7 +96,12 @@ def detect(model, processor, image: Image.Image, use_grounding: bool = True) -> 
     if use_grounding:
         labels, boxes, tr = _run(model, processor, image, "<CAPTION_TO_PHRASE_GROUNDING>", ". ".join(VOCAB) + ".")
         truncated |= tr
-        for l, b in list(zip(labels, boxes))[:MAX_VERIFY]:
+        # 카페 핵심 장비(커피머신, 그라인더, 카운터 등)를 일반 가구보다 먼저 검증하도록 우선순위 정렬
+        paired = sorted(
+            zip(labels, boxes),
+            key=lambda x: 0 if x[0].lower().strip() in CAFE_PRIORITY_LABELS else 1
+        )
+        for l, b in paired[:MAX_VERIFY]:
             ok, cap = _verify(model, processor, image, l, b, objs)
             o = {"label": l, "box": b, "task": "GROUNDING", "check": cap}
             (objs if ok else rejected).append(o)
@@ -91,24 +113,56 @@ def detect(model, processor, image: Image.Image, use_grounding: bool = True) -> 
     return {"objects": objs, "rejected": rejected, "seconds": round(time.time() - t0, 1), "truncated": truncated}
 
 
-MAX_VERIFY = 8  # grounding 박스 검증 상한 (CPU 시간 보호)
-SYNONYMS = {"refrigerator": ["fridge", "refrigerator", "cooler"], "display case": ["display", "case", "showcase", "counter"],
-            "cash register": ["register", "pos", "cash", "computer", "screen"], "ice maker": ["ice", "machine"],
-            "espresso machine": ["espresso", "coffee", "machine"], "coffee grinder": ["grinder", "coffee"],
-            "television": ["tv", "television", "screen"], "cabinet": ["cabinet", "cupboard", "drawer"]}
+MAX_VERIFY = 18  # 카페 장비가 누락되지 않도록 검증 상한 확대 (기존 8 -> 18)
+
+# Florence-2 캡션에서 자주 나오는 외형·동의어 사전 대폭 확장
+SYNONYMS = {
+    "espresso machine": ["espresso", "coffee", "machine", "maker", "appliance", "brewer", "stainless", "silver"],
+    "coffee machine": ["coffee", "espresso", "machine", "maker", "appliance", "brewer", "dispenser"],
+    "coffee grinder": ["grinder", "coffee", "mill", "machine", "appliance", "hopper", "cylinder", "black", "silver"],
+    "ice maker": ["ice", "machine", "maker", "freezer", "cooler", "bin", "stainless", "appliance"],
+    "blender": ["blender", "mixer", "pitcher", "jar", "appliance", "machine"],
+    "water dispenser": ["water", "dispenser", "boiler", "heater", "purifier", "machine", "appliance", "tap"],
+    "refrigerator": ["fridge", "refrigerator", "cooler", "freezer", "stainless", "cabinet", "appliance"],
+    "freezer": ["freezer", "fridge", "refrigerator", "cooler", "chest", "stainless"],
+    "display case": ["display", "case", "showcase", "counter", "cabinet", "glass", "fridge", "cooler", "bakery", "pastry"],
+    "pastry display": ["pastry", "bakery", "cake", "bread", "display", "case", "showcase", "glass", "counter"],
+    "counter": ["counter", "bar", "desk", "table", "cabinet", "island", "worktop", "stand", "reception", "wood"],
+    "bar counter": ["bar", "counter", "desk", "island", "worktop", "table", "cabinet", "stand"],
+    "cash register": ["register", "pos", "cash", "computer", "screen", "monitor", "terminal", "tablet", "display"],
+    "pos terminal": ["pos", "terminal", "register", "screen", "monitor", "computer", "tablet", "cash"],
+    "kiosk": ["kiosk", "screen", "monitor", "display", "terminal", "stand", "machine"],
+    "oven": ["oven", "stove", "toaster", "bakery", "appliance", "machine"],
+    "microwave": ["microwave", "oven", "appliance"],
+    "dishwasher": ["dishwasher", "washer", "machine", "stainless", "appliance"],
+    "sink": ["sink", "faucet", "tap", "basin", "wash", "stainless", "counter"],
+    "television": ["tv", "television", "screen", "monitor", "display"],
+    "cabinet": ["cabinet", "cupboard", "drawer", "shelf", "storage", "counter"],
+}
 
 
 def _verify(model, processor, image, label, box, od_objs):
-    """grounding 은 사전 단어를 억지로 맞추는 경향이 있어, 박스를 잘라 캡션을 다시 만들고 품목명이 나오는지 확인."""
-    if any(_iou(box, o["box"]) > 0.5 and label.split()[-1] in o["label"].lower() for o in od_objs):
+    """grounding 박스를 잘라 캡션을 만들고 품목명이 나오는지 확인 (카페 핵심 장비는 관대하게 판정)."""
+    clean_label = label.lower().strip()
+    if any(_iou(box, o["box"]) > 0.4 and clean_label.split()[-1] in o["label"].lower() for o in od_objs):
         return True, "OD 일치"
     x1, y1, x2, y2 = [int(v) for v in box]
-    if x2 - x1 < 16 or y2 - y1 < 16:
+    # 그라인더 등 소형 장비는 12px 이상이면 검증 허용
+    min_px = 12 if clean_label in CAFE_PRIORITY_LABELS else 16
+    if x2 - x1 < min_px or y2 - y1 < min_px:
         return False, "너무 작음"
     crop = image.crop((x1, y1, x2, y2))
     cap = _caption(model, processor, crop).lower()
-    words = SYNONYMS.get(label, label.split())
-    return any(w in cap for w in words), cap
+
+    # 캡션에서 배경(벽·바닥·천장·사람)만 단독으로 나온 경우가 아니면 카페 핵심 장비는 폭넓게 인정
+    words = SYNONYMS.get(clean_label, clean_label.split())
+    if any(w in cap for w in words):
+        return True, cap
+    if clean_label in CAFE_PRIORITY_LABELS:
+        generic_equip = ["machine", "appliance", "equipment", "device", "counter", "kitchen", "cafe", "shop", "metal"]
+        if any(g in cap for g in generic_equip):
+            return True, f"{cap} (카페장비 인정)"
+    return False, cap
 
 
 @torch.inference_mode()
@@ -134,9 +188,11 @@ def code_filter(objects: list[dict], image_size: tuple[int, int]) -> tuple[list[
     for o in objects:
         label = o["label"].lower().strip()
         x1, y1, x2, y2 = o["box"]
+        min_ratio = MIN_PRIORITY_AREA_RATIO if label in CAFE_PRIORITY_LABELS else MIN_AREA_RATIO
+
         if any(word in label.split() for word in BLOCK_WORDS):
             dropped.append({**o, "reason": "제외 목록"})
-        elif (x2 - x1) * (y2 - y1) < MIN_AREA_RATIO * w * h:
+        elif (x2 - x1) * (y2 - y1) < min_ratio * w * h:
             dropped.append({**o, "reason": "너무 작음"})
         elif any(k["task"] != o.get("task") and k["label"].lower() == label and _iou(k["box"], o["box"]) > 0.6
                  for k in kept):  # OD 와 grounding 이 같은 물체를 둘 다 잡은 경우만 중복 처리
