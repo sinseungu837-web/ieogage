@@ -61,22 +61,48 @@ def search_links(name: str) -> dict:
     }
 
 
+FONT_CANDIDATES = [  # Windows(노트북) / Linux(배포 서버, packages.txt 의 fonts-nanum)
+    "C:/Windows/Fonts/malgunbd.ttf", "C:/Windows/Fonts/malgun.ttf",
+    "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf", "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+]
+PALETTE = [(230, 57, 70), (29, 120, 220), (0, 150, 110), (240, 140, 0), (140, 70, 200),
+           (0, 160, 180), (200, 60, 150), (90, 110, 30), (120, 80, 40), (60, 60, 60)]
+
+
+def korean_font(size: int):
+    for path in FONT_CANDIDATES:
+        try:
+            return ImageFont.truetype(path, size)
+        except OSError:
+            continue
+    return ImageFont.load_default(size)
+
+
 def draw_boxes(image: Image.Image, objects: list[dict], names: dict[int, str]) -> Image.Image:
+    """객체 탐지 결과처럼 품목별 색상 박스 + 한글 라벨(같은 품목은 번호)."""
     img = image.copy()
     d = ImageDraw.Draw(img)
-    try:
-        font = ImageFont.truetype("C:/Windows/Fonts/malgun.ttf", 16)
-    except OSError:
-        font = ImageFont.load_default()
+    W, H = img.size
+    size = max(14, W // 45)
+    font = korean_font(size)
+    line = max(2, W // 300)
+    colors, counters = {}, {}
     for o in objects:
         if o["id"] not in names:
             continue
+        name = names[o["id"]]
+        color = colors.setdefault(name, PALETTE[len(colors) % len(PALETTE)])
+        counters[name] = counters.get(name, 0) + 1
+        label = f"{name} {counters[name]}"
         x1, y1, x2, y2 = o["box"]
-        d.rectangle([x1, y1, x2, y2], outline=(0, 160, 120), width=3)
-        label = names[o["id"]]
-        tw = d.textlength(label, font=font)
-        d.rectangle([x1, max(0, y1 - 20), x1 + tw + 6, y1], fill=(0, 160, 120))
-        d.text((x1 + 3, max(0, y1 - 19)), label, fill="white", font=font)
+        d.rectangle([x1, y1, x2, y2], outline=color, width=line)
+        l, t, r, b = d.textbbox((0, 0), label, font=font)
+        tw, th = r - l + 8, b - t + 6
+        lx = min(max(0, x1), W - tw)
+        ly = y1 - th if y1 - th >= 0 else y1  # 위쪽에 자리가 없으면 박스 안쪽 위에
+        d.rectangle([lx, ly, lx + tw, ly + th], fill=color)
+        d.text((lx + 4 - l, ly + 3 - t), label, fill="white", font=font)
     return img
 
 
