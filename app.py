@@ -153,6 +153,13 @@ if file is not None:
                 result = llm.verify_ambiguous(image, kept, result)
             except Exception:
                 result["verified"] = []  # 재확인 실패 시 1차 판별 결과를 그대로 사용
+        with st.spinner("④ 놓친 장비를 찾는 중 (Gemini가 사진 전체 확인)..."):
+            try:
+                new_objs, new_items = llm.find_missing(image, result, det["objects"])
+                det["objects"] += new_objs
+                result["items"] += new_items
+            except Exception:
+                pass  # 보완 실패 시 기존 결과 유지
         st.session_state.last = {"key": key, "image": image, "det": det, "kept": kept, "dropped": dropped,
                                  "result": result}
         st.rerun()
