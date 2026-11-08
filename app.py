@@ -118,7 +118,7 @@ runs = st.session_state.setdefault("runs", 0)
 src = st.radio("사진 입력", ["사진 올리기", "카메라로 찍기"], horizontal=True)
 file = st.file_uploader("매장 사진", type=["jpg", "jpeg", "png"]) if src == "사진 올리기" \
     else st.camera_input("매장을 넓게 찍어 주세요")
-use_grounding = st.toggle("품목 사전으로 한 번 더 찾기 (정확도↑, 시간 약 2배)", value=True)
+use_grounding = st.toggle("전문 장비 한 번 더 찾기 (제빙기·쇼케이스 등 놓칠 때만 켜기, 시간 약 7배)", value=False)
 
 if file is not None:
     if file.size > MAX_UPLOAD_MB * 1024 * 1024:
@@ -127,7 +127,12 @@ if file is not None:
     image = vision.prepare(Image.open(file))
     st.image(image, caption="올린 사진", use_container_width=True)
 
-    if st.button("집기 분석하기", type="primary", disabled=runs >= MAX_RUNS_PER_SESSION):
+    import hashlib
+    key = hashlib.md5(image.tobytes()).hexdigest() + str(use_grounding)
+    already = st.session_state.get("last", {}).get("key") == key
+    if already:
+        st.caption("이 사진은 이미 분석했습니다. 결과는 아래에 있습니다.")
+    if st.button("집기 분석하기", type="primary", disabled=runs >= MAX_RUNS_PER_SESSION or already):
         if not take_daily_quota():
             st.error("오늘 서비스 전체 분석 한도에 도달했습니다. 내일 다시 이용해 주세요.")
             st.stop()
@@ -143,7 +148,9 @@ if file is not None:
                 st.error("AI 판별 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.")
                 st.caption(type(e).__name__)
                 st.stop()
-        st.session_state.last = {"image": image, "det": det, "kept": kept, "dropped": dropped, "result": result}
+        st.session_state.last = {"key": key, "image": image, "det": det, "kept": kept, "dropped": dropped,
+                                 "result": result}
+        st.rerun()
     if runs >= MAX_RUNS_PER_SESSION:
         st.warning("이 화면에서 가능한 분석 횟수를 모두 사용했습니다.")
 

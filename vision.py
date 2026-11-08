@@ -90,7 +90,7 @@ def detect(model, processor, image: Image.Image, use_grounding: bool = True) -> 
     return {"objects": objs, "rejected": rejected, "seconds": round(time.time() - t0, 1), "truncated": truncated}
 
 
-MAX_VERIFY = 12  # grounding 박스 검증 상한 (CPU 시간 보호)
+MAX_VERIFY = 8  # grounding 박스 검증 상한 (CPU 시간 보호)
 SYNONYMS = {"refrigerator": ["fridge", "refrigerator", "cooler"], "display case": ["display", "case", "showcase", "counter"],
             "cash register": ["register", "pos", "cash", "computer", "screen"], "ice maker": ["ice", "machine"],
             "espresso machine": ["espresso", "coffee", "machine"], "coffee grinder": ["grinder", "coffee"],
