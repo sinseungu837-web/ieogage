@@ -137,10 +137,15 @@ if file is not None:
             st.error("오늘 서비스 전체 분석 한도에 도달했습니다. 내일 다시 이용해 주세요.")
             st.stop()
         st.session_state.runs = runs + 1
+        import time as _t
+        T = {"load": _t.time()}
         model, processor = get_vision()
+        T["모델 준비"] = _t.time() - T.pop("load")
+        _s = _t.time()
         with st.spinner("① 사진에서 물체를 찾는 중 (Florence-2)..."):
             det = vision.detect(model, processor, image, use_grounding)
         kept, dropped = vision.code_filter(det["objects"], image.size)
+        T["Florence 탐지"] = _t.time() - _s; _s = _t.time()
         with st.spinner("② 판매할 수 있는 집기만 고르는 중 (Gemini)..."):
             try:
                 result = llm.classify_items(kept) if kept else {"items": [], "excluded": []}
@@ -148,11 +153,13 @@ if file is not None:
                 st.error("AI 판별 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.")
                 st.caption(type(e).__name__)
                 st.stop()
+        T["Gemini 판별"] = _t.time() - _s; _s = _t.time()
         with st.spinner("③ 헷갈리는 장비만 이미지로 다시 확인하는 중 (Gemini)..."):
             try:
                 result = llm.verify_ambiguous(image, kept, result)
             except Exception:
                 result["verified"] = []  # 재확인 실패 시 1차 판별 결과를 그대로 사용
+        T["Gemini 재확인"] = _t.time() - _s; _s = _t.time()
         with st.spinner("④ 놓친 장비를 찾는 중 (Gemini가 사진 전체 확인)..."):
             try:
                 new_objs, new_items = llm.find_missing(image, result, det["objects"])
@@ -160,6 +167,8 @@ if file is not None:
                 result["items"] += new_items
             except Exception:
                 pass  # 보완 실패 시 기존 결과 유지
+        T["Gemini 보완"] = _t.time() - _s
+        det["timing"] = {k: round(v, 1) for k, v in T.items()}
         st.session_state.last = {"key": key, "image": image, "det": det, "kept": kept, "dropped": dropped,
                                  "result": result}
         st.rerun()
@@ -174,6 +183,7 @@ if last:
     st.image(draw_boxes(last["image"], last["det"]["objects"], names), use_container_width=True)
     st.caption(f"탐지 {len(last['det']['objects'])}개 → 코드 필터 후 {len(last['kept'])}개 → "
                f"집기 {len(items)}종 · {last['det']['seconds']}초"
+               + (" | " + " · ".join(f"{k} {v}초" for k, v in last['det'].get('timing', {}).items()))
                + (" · ⚠ 물체가 많아 일부 누락 가능 (나눠 찍기 권장)" if last["det"]["truncated"] else ""))
 
     if items:
