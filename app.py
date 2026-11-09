@@ -118,7 +118,7 @@ runs = st.session_state.setdefault("runs", 0)
 src = st.radio("사진 입력", ["사진 올리기", "카메라로 찍기"], horizontal=True)
 file = st.file_uploader("매장 사진", type=["jpg", "jpeg", "png"]) if src == "사진 올리기" \
     else st.camera_input("매장을 넓게 찍어 주세요")
-use_grounding = st.toggle("전문 장비 한 번 더 찾기 (제빙기·쇼케이스 등 놓칠 때만 켜기, 시간 약 7배)", value=False)
+use_grounding = (st.toggle("전문 장비 한 번 더 찾기 (제빙기·쇼케이스 등 놓칠 때만 켜기, 시간 약 7배)", value=False)) if vision.DETECTOR == "florence" else False
 
 if file is not None:
     if file.size > MAX_UPLOAD_MB * 1024 * 1024:
@@ -142,10 +142,10 @@ if file is not None:
         model, processor = get_vision()
         T["모델 준비"] = _t.time() - T.pop("load")
         _s = _t.time()
-        with st.spinner("① 사진에서 물체를 찾는 중 (Florence-2)..."):
+        with st.spinner(f"① 사진에서 물체를 찾는 중 ({'RF-DETR' if vision.DETECTOR == 'rfdetr' else 'Florence-2'})..."):
             det = vision.detect(model, processor, image, use_grounding)
         kept, dropped = vision.code_filter(det["objects"], image.size)
-        T["Florence 탐지"] = _t.time() - _s; _s = _t.time()
+        T["1단계 탐지"] = _t.time() - _s; _s = _t.time()
         with st.spinner("② 판매할 수 있는 집기만 고르는 중 (Gemini)..."):
             try:
                 result = llm.classify_items(kept) if kept else {"items": [], "excluded": []}
