@@ -52,6 +52,24 @@ MIN_PRIORITY_AREA_RATIO = 0.0005  # 멀리 찍힌 그라인더·커피머신은 
 MAX_BOX_AREA_RATIO = 0.85
 
 
+def _cpu_limit() -> int:
+    """컨테이너(서버)에 실제로 허용된 CPU 수. 서버는 코어를 많이 보여 줘도 2개만 허용될 수 있어
+    스레드를 과하게 띄우면 서로 경쟁해 크게 느려진다."""
+    try:  # cgroup v2
+        q, p = open("/sys/fs/cgroup/cpu.max").read().split()
+        if q != "max":
+            return max(1, int(int(q) / int(p)))
+    except Exception:
+        pass
+    try:  # cgroup v1
+        q = int(open("/sys/fs/cgroup/cpu/cpu.cfs_quota_us").read()); p = int(open("/sys/fs/cgroup/cpu/cpu.cfs_period_us").read())
+        if q > 0:
+            return max(1, q // p)
+    except Exception:
+        pass
+    return os.cpu_count() or 2
+
+
 def _get_device() -> str:
     if torch.cuda.is_available():
         return "cuda"
@@ -63,17 +81,22 @@ def _get_device() -> str:
 DEVICE = _get_device()
 
 
+_ORIG_GET_IMPORTS = None  # patch 전 원본 (patch 안에서 다시 import 하면 자기 자신을 불러 무한 반복)
+
+
 def _no_flash_attn(filename):
-    from transformers.dynamic_module_utils import get_imports
-    imports = get_imports(filename)
+    imports = _ORIG_GET_IMPORTS(filename)
     if str(filename).endswith("modeling_florence2.py") and "flash_attn" in imports:
         imports.remove("flash_attn")
     return imports
 
 
 def _load_florence():
+    global _ORIG_GET_IMPORTS
     from transformers import AutoModelForCausalLM, AutoProcessor
-    torch.set_num_threads(os.cpu_count() or 4)
+    from transformers import dynamic_module_utils
+    _ORIG_GET_IMPORTS = _ORIG_GET_IMPORTS or dynamic_module_utils.get_imports
+    torch.set_num_threads(_cpu_limit())
     # MPS에서 간혹 float16이 느려지거나 오류가 나는 경우를 방지하기 위해 안정적인 설정 적용
     dtype = torch.float16 if DEVICE == "cuda" else torch.float32
     with patch("transformers.dynamic_module_utils.get_imports", _no_flash_attn):
@@ -90,7 +113,7 @@ def load_model():
     if DETECTOR == "florence":
         return _load_florence()
     from rfdetr import RFDETRNano
-    torch.set_num_threads(os.cpu_count() or 4)
+    torch.set_num_threads(_cpu_limit())
     return RFDETRNano(), None
 
 
