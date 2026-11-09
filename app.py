@@ -106,7 +106,8 @@ def draw_boxes(
     d = ImageDraw.Draw(img)
     W, H = img.size
     size = max(14, W // 45)
-    font = korean_font(size)
+    label_font = korean_font(size)  # 배경 라벨 크기는 기존 글꼴 기준으로 유지
+    font = korean_font(max(10, int(size * 0.8)))
     line = max(2, W // 300)
     colors, counters = {}, {}
 
@@ -126,12 +127,13 @@ def draw_boxes(
         box_width = line * 2 if oid == selected_id else line
         d.rectangle([x1, y1, x2, y2], outline=box_color, width=box_width)
 
-        l, t, r, b = d.textbbox((0, 0), label, font=font)
+        l, t, r, b = d.textbbox((0, 0), label, font=label_font)
         tw, th = r - l + 8, b - t + 6
         lx = min(max(0, x1), W - tw)
         ly = y1 - th if y1 - th >= 0 else y1
         d.rectangle([lx, ly, lx + tw, ly + th], fill=color)
-        d.text((lx + 4 - l, ly + 3 - t), label, fill="white", font=font)
+        tl, tt, tr, tb = d.textbbox((0, 0), label, font=font)
+        d.text((lx + 4 - tl, ly + (th - (tb - tt)) / 2 - tt), label, fill="white", font=font)
 
     # 사용자가 '미탐지 물건 추가'를 위해 방금 클릭한 위치 미리보기 박스 표시
     if pending_box:
@@ -140,12 +142,13 @@ def draw_boxes(
         d.rectangle([px1, py1, px2, py2], outline=(0, 230, 118), width=line + 2)
         d.ellipse([cx - 6, cy - 6, cx + 6, cy + 6], fill=(255, 0, 80), outline="white", width=2)
         p_label = "➕ 새 집기 추가 위치"
-        l, t, r, b = d.textbbox((0, 0), p_label, font=font)
+        l, t, r, b = d.textbbox((0, 0), p_label, font=label_font)
         tw, th = r - l + 8, b - t + 6
         lx = min(max(0, px1), W - tw)
         ly = py1 - th if py1 - th >= 0 else py1
         d.rectangle([lx, ly, lx + tw, ly + th], fill=(0, 180, 90))
-        d.text((lx + 4 - l, ly + 3 - t), p_label, fill="white", font=font)
+        tl, tt, tr, tb = d.textbbox((0, 0), p_label, font=font)
+        d.text((lx + 4 - tl, ly + (th - (tb - tt)) / 2 - tt), p_label, fill="white", font=font)
 
     return img
 
