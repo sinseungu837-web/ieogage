@@ -4,7 +4,12 @@
 
 ## 반드시 지킬 것
 1. **API 키를 코드·커밋·로그에 넣지 않는다.** 키는 로컬 `.env`(gitignore 처리) 또는 Streamlit Cloud Secrets 에만. 키가 커밋에 들어가면 즉시 키 폐기·재발급.
-2. **main 에 직접 push 하지 않는다.** 기능별 브랜치(`feature/<작업자>-<작업명>-<날짜>`) → PR → 작업자가 테스트 결과를 PR 에 적고 **본인이 병합해도 된다.** main 은 Streamlit Cloud 배포 브랜치다(병합 즉시 ieogage.streamlit.app 재배포). 병합 후 링크에서 동작을 확인한다. 강제 push·다른 사람 브랜치 삭제 금지, 충돌 시 다른 사람의 변경을 지우지 말 것.
+2. **main 에 직접 push 해도 된다** (팀 결정, 2026-11-09). 단 main 은 Streamlit Cloud 배포 브랜치라 push 즉시 ieogage.streamlit.app 에 반영되므로:
+   - push 전에 `git pull` 로 최신 main 을 받는다 (다른 사람 변경 덮어쓰기 방지)
+   - push 전에 최소 `python -m py_compile app.py vision.py llm.py` 와 로컬 실행으로 화면이 뜨는지 확인한다
+   - 큰 변경은 기존처럼 브랜치 → PR → 본인 병합도 가능
+   - push 후 링크에서 동작을 확인하고, 깨지면 바로 `git revert` 로 되돌린다
+   - 강제 push(`--force`)·다른 사람 브랜치 삭제 금지, 충돌 시 다른 사람의 변경을 지우지 말 것
 3. **역할 분담 유지:** 숫자(개수·가격)는 코드가 계산하고, LLM 은 판별과 문장만. LLM 이 가격을 만들게 하지 않는다.
 4. **Florence → LLM 순서 유지:** 비전 모델이 이미지를 인식하고, LLM 은 그 결과(라벨 목록)를 받는다. 헷갈리는 장비·고정 설비 의심 품목만 잘라낸 이미지로 재확인한다(`llm.verify_ambiguous`, 최대 8개, 1회 호출).
 5. 모델 파일·테스트 사진·`.venv` 는 올리지 않는다 (`.gitignore`).
