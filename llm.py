@@ -19,6 +19,7 @@ CONFUSABLE = {
     "커피 장비": ["에스프레소 머신", "커피 그라인더", "커피머신", "블렌더", "정수기", "제빙기", "포스기", "키오스크"],
     "냉장·보관": ["업소용 냉장고", "테이블 냉장고", "쇼케이스 냉장고", "업소용 냉동고", "수납장", "하부장", "선반"],
     "조명": ["조명 스탠드", "펜던트 조명", "레일 조명"],
+    "화면": ["TV", "모니터", "디지털 메뉴보드", "포스기", "키오스크", "카드 단말기", "커피머신"],
 }
 MAX_CROPS = 8
 LOW_CONF = 0.5  # 탐지 점수(RF-DETR)가 이 미만이면 사진으로 재확인  # 이미지 재확인 상한 (속도·무료 사용량 보호)
@@ -241,9 +242,19 @@ def find_missing(image, result: dict, objects: list[dict], model: str | None = N
         box = [x1 * W / 1000, y1 * H / 1000, x2 * W / 1000, y2 * H / 1000]
         if box[2] - box[0] < 8 or box[3] - box[1] < 8:
             continue
+        if any(_overlap(box, o["box"]) > 0.5 for o in objects + new_objs):
+            continue  # 이미 있는 박스와 크게 겹치면 같은 물건(이름만 다른 중복)으로 보고 버림
         new_objs.append({"id": next_id, "label": name, "box": [round(v, 1) for v in box], "task": "GEMINI"})
         groups.setdefault(name, []).append(next_id)
         next_id += 1
     new_items = [{"name": n, "count": len(ids), "source_ids": ids, "in_dictionary": n in p["dictionary"],
                   "uncertain": True, "category": "집기", "note": "AI 보완 탐지"} for n, ids in groups.items()]
     return new_objs, new_items
+
+
+def _overlap(a, b) -> float:
+    """두 박스 중 작은 쪽 면적 대비 겹친 비율 (한 박스가 다른 박스를 덮는 중복도 잡음)."""
+    x1, y1, x2, y2 = max(a[0], b[0]), max(a[1], b[1]), min(a[2], b[2]), min(a[3], b[3])
+    inter = max(0, x2 - x1) * max(0, y2 - y1)
+    area = lambda r: max(1e-6, (r[2] - r[0]) * (r[3] - r[1]))
+    return inter / min(area(a), area(b))
