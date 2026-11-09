@@ -434,7 +434,7 @@ if last:
                         st.rerun()
 
     if items:
-        items = sorted(items, key=lambda it: it.get("category") == "기타")  # 기타(장식·소품)는 아래로
+        items = sorted(items, key=lambda it: {"집기": 0, "재고·소모품": 1, "기타": 2}.get(it.get("category", "집기"), 0))  # 집기 → 재고·소모품 → 기타
         df = pd.DataFrame([{"품목": it["name"], "수량": it["count"], "분류": it.get("category", "집기"),
                             "확인 필요": it.get("note") or ("예" if it["uncertain"] or not it["in_dictionary"] else "")}
                            for it in items])
