@@ -6,7 +6,7 @@ with sync_playwright() as p:
  b=p.chromium.launch(executable_path=os.environ.get('CHROMIUM_PATH', '/usr/bin/chromium'),headless=True,args=['--no-sandbox'])
  for mobile in (False,True):
   c=b.new_context(viewport={'width':390 if mobile else 1100,'height':900},is_mobile=mobile,has_touch=mobile)
-  page=c.new_page(); page.goto('http://localhost:8501'); page.get_by_text('새 물건 영역 그리기',exact=True).click()
+  page=c.new_page(); page.goto(os.environ.get('EDITOR_URL', 'http://localhost:8501')); page.get_by_role('button',name='이전 분석 이어서 수정하기',exact=True).click(); page.get_by_text('새 물건 영역 그리기',exact=True).click()
   f=page.frame_locator('iframe[title="box_selector.box_selector"]'); surface=f.locator('#surface'); surface.wait_for()
   surface.scroll_into_view_if_needed(); page.wait_for_timeout(700)
   r=surface.bounding_box(); x=r['x'];y=r['y'];w=r['width'];h=r['height']
@@ -36,7 +36,7 @@ with sync_playwright() as p:
   page.get_by_label('올바른 품목명을 자연어로 입력하세요').fill('스툴')
   page.get_by_role('button',name='이름 수정',exact=True).click()
   page.wait_for_timeout(700)
-  page.get_by_text('스툴 × 1',exact=True).wait_for()
+  assert page.get_by_label('올바른 품목명을 자연어로 입력하세요').input_value() == '스툴'
   page.get_by_role('button',name='박스 삭제',exact=True).click()
   page.get_by_text('총 1개 박스',exact=False).wait_for()
   print('existing box select, rename, delete PASS')

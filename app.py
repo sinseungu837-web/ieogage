@@ -14,6 +14,7 @@ import llm
 import vision
 
 from box_selector import select_box, validated_box
+from inventory import inventory_rows
 
 BASE = Path(__file__).parent
 load_dotenv(BASE / ".env")
@@ -178,81 +179,55 @@ def rebuild_items_from_boxes(objects: list[dict], names: dict[int, str], orig_it
     return new_items
 
 
-# ---------------- 화면 ----------------
-st.title("🏪 이어가게")
-st.caption("매장 사진 한 장으로 남은 집기를 정리하고, 다음 가게로 이어줍니다.")
-
-if not llm.get_api_key():
-    st.error("서버에 AI 키가 설정되지 않았습니다. 관리자에게 문의하세요.")
-    st.stop()
-
-runs = st.session_state.setdefault("runs", 0)
-src = st.radio("사진 입력", ["사진 올리기", "카메라로 찍기"], horizontal=True)
-file = st.file_uploader("매장 사진", type=["jpg", "jpeg", "png"]) if src == "사진 올리기" \
-    else st.camera_input("매장을 넓게 찍어 주세요")
-use_grounding = (st.toggle("전문 장비 한 번 더 찾기 (제빙기·쇼케이스 등 놓칠 때만 켜기, 시간 약 7배)", value=False)) if vision.DETECTOR == "florence" else False
-
-if file is not None:
-    if file.size > MAX_UPLOAD_MB * 1024 * 1024:
-        st.error(f"{MAX_UPLOAD_MB}MB 이하 사진만 올릴 수 있습니다.")
+def analyze_photo(image, key, use_grounding):
+    if not take_daily_quota():
+        st.error("오늘 서비스 전체 분석 한도에 도달했습니다. 내일 다시 이용해 주세요.")
         st.stop()
-    image = vision.prepare(Image.open(file))
-    st.image(image, caption="올린 사진", use_container_width=True)
-
-    import hashlib
-    key = hashlib.md5(image.tobytes()).hexdigest() + str(use_grounding)
-    already = st.session_state.get("last", {}).get("key") == key  # 같은 사진 재분석 방지 (안내 문구는 표시 안 함)
-    if st.button("집기 분석하기", type="primary", disabled=runs >= MAX_RUNS_PER_SESSION or already):
-        if not take_daily_quota():
-            st.error("오늘 서비스 전체 분석 한도에 도달했습니다. 내일 다시 이용해 주세요.")
+    st.session_state.runs = st.session_state.get("runs", 0) + 1
+    import time as _t
+    T = {"load": _t.time()}
+    model, processor = get_vision()
+    T["모델 준비"] = _t.time() - T.pop("load")
+    _s = _t.time()
+    with st.spinner(f"① 사진에서 물체를 찾는 중 ({'RF-DETR' if vision.DETECTOR == 'rfdetr' else 'Florence-2'})..."):
+        det = vision.detect(model, processor, image, use_grounding)
+    kept, dropped = vision.code_filter(det["objects"], image.size)
+    T["1단계 탐지"] = _t.time() - _s; _s = _t.time()
+    with st.spinner("② 판매할 수 있는 집기만 고르는 중 (Gemini)..."):
+        try:
+            result = llm.classify_items(kept) if kept else {"items": [], "excluded": []}
+        except Exception as e:
+            st.error("AI 판별 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.")
+            st.caption(type(e).__name__)
             st.stop()
-        st.session_state.runs = runs + 1
-        import time as _t
-        T = {"load": _t.time()}
-        model, processor = get_vision()
-        T["모델 준비"] = _t.time() - T.pop("load")
-        _s = _t.time()
-        with st.spinner(f"① 사진에서 물체를 찾는 중 ({'RF-DETR' if vision.DETECTOR == 'rfdetr' else 'Florence-2'})..."):
-            det = vision.detect(model, processor, image, use_grounding)
-        kept, dropped = vision.code_filter(det["objects"], image.size)
-        T["1단계 탐지"] = _t.time() - _s; _s = _t.time()
-        with st.spinner("② 판매할 수 있는 집기만 고르는 중 (Gemini)..."):
-            try:
-                result = llm.classify_items(kept) if kept else {"items": [], "excluded": []}
-            except Exception as e:
-                st.error("AI 판별 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.")
-                st.caption(type(e).__name__)
-                st.stop()
-        T["Gemini 판별"] = _t.time() - _s; _s = _t.time()
-        with st.spinner("③ 놓친 장비를 찾는 중 (Gemini가 사진 전체 확인)..."):
-            try:
-                new_objs, new_items = llm.find_missing(image, result, det["objects"])
-                det["objects"] += new_objs
-                result["items"] += new_items
-            except Exception:
-                pass  # 보완 실패 시 기존 결과 유지
-        T["Gemini 보완"] = _t.time() - _s; _s = _t.time()
-        with st.spinner("④ 헷갈리는 장비만(보완 결과 포함) 이미지로 다시 확인하는 중 (Gemini)..."):
-            try:
-                result = llm.verify_ambiguous(image, kept + [o for o in det["objects"] if o.get("task") == "GEMINI"], result)
-            except Exception:
-                result["verified"] = []  # 재확인 실패 시 1차 판별 결과를 그대로 사용
-        T["Gemini 재확인"] = _t.time() - _s
-        det["timing"] = {k: round(v, 1) for k, v in T.items()}
-        st.session_state.last = {
-            "key": key, "image": image, "det": det, "kept": kept, "dropped": dropped, "result": result,
-            # [소정] 사용자 직접 수정용 상태: 박스 번호별 품목명, 새 박스 번호, 클릭 위치, 선택 박스
-            "box_names": {i: it["name"] for it in result["items"] for i in it["source_ids"]},
-            "next_id": max([o["id"] for o in det["objects"]], default=0) + 1,
-            "pending_box": None,
-            "selected_box_id": None,
-        }
-        st.rerun()
-    if runs >= MAX_RUNS_PER_SESSION:
-        st.warning("이 화면에서 가능한 분석 횟수를 모두 사용했습니다.")
+    T["Gemini 판별"] = _t.time() - _s; _s = _t.time()
+    with st.spinner("③ 놓친 장비를 찾는 중 (Gemini가 사진 전체 확인)..."):
+        try:
+            new_objs, new_items = llm.find_missing(image, result, det["objects"])
+            det["objects"] += new_objs
+            result["items"] += new_items
+        except Exception:
+            pass  # 보완 실패 시 기존 결과 유지
+    T["Gemini 보완"] = _t.time() - _s; _s = _t.time()
+    with st.spinner("④ 헷갈리는 장비만(보완 결과 포함) 이미지로 다시 확인하는 중 (Gemini)..."):
+        try:
+            result = llm.verify_ambiguous(image, kept + [o for o in det["objects"] if o.get("task") == "GEMINI"], result)
+        except Exception:
+            result["verified"] = []  # 재확인 실패 시 1차 판별 결과를 그대로 사용
+    T["Gemini 재확인"] = _t.time() - _s
+    det["timing"] = {k: round(v, 1) for k, v in T.items()}
+    st.session_state.last = {
+        "key": key, "image": image, "det": det, "kept": kept, "dropped": dropped, "result": result,
+        # [소정] 사용자 직접 수정용 상태: 박스 번호별 품목명, 새 박스 번호, 클릭 위치, 선택 박스
+        "box_names": {i: it["name"] for it in result["items"] for i in it["source_ids"]},
+        "next_id": max([o["id"] for o in det["objects"]], default=0) + 1,
+        "pending_box": None,
+        "selected_box_id": None,
+    }
+    go_to(3)
 
-last = st.session_state.get("last")
-if last:
+
+def edit_page(last):
     W, H = last["image"].size
     box_names: dict[int, str] = last.setdefault(
         "box_names", {i: it["name"] for it in last["result"]["items"] for i in it["source_ids"]}
@@ -297,16 +272,10 @@ if last:
                 st.session_state[f"edit_box_{last['key']}"] = selected
                 st.rerun()
 
-    # 사용자가 수정한 내역을 바탕으로 items 실시간 재계산
-    items = rebuild_items_from_boxes(objects, box_names, last["result"]["items"])
-    last["result"]["items"] = items
-
-    st.caption(
-        f"탐지 {len(objects)}개 → 코드 필터 후 {len(last['kept'])}개 → "
-        f"현재 집기 {len(items)}종 (총 {len(box_names)}개 박스) · {last['det']['seconds']}초"
-        + (" | " + " · ".join(f"{k} {v}초" for k, v in last["det"].get("timing", {}).items()))
-        + (" · ⚠ 물체가 많아 일부 누락 가능 (나눠 찍기 권장)" if last["det"]["truncated"] else "")
-    )
+    rows = inventory_rows(last)
+    st.caption(f"현재 집기 {len(rows)}종 · 총 {len(box_names)}개 박스")
+    if last['det'].get('truncated'):
+        st.caption('물체가 많아 일부 누락될 수 있습니다. 놓친 물건은 직접 추가해 주세요.')
 
     # ---------------- 사용자 직접 수정 / 미탐지 추가 UI ----------------
     with st.container(border=True):
@@ -401,43 +370,162 @@ if last:
                         st.toast(f"[#{new_id}] '{cleaned_name}' 을(를) 추가했습니다.")
                         st.rerun()
 
-    if items:
-        items = sorted(items, key=lambda it: {"집기": 0, "재고·소모품": 1, "기타": 2}.get(it.get("category", "집기"), 0))  # 집기 → 재고·소모품 → 기타
-        df = pd.DataFrame([{"품목": it["name"], "수량": it["count"], "분류": it.get("category", "집기"),
-                            "확인 필요": it.get("note") or ("예" if it["uncertain"] or not it["in_dictionary"] else "")}
-                           for it in items])
-        st.write("틀린 품목·수량은 표에서 바로 고칠 수 있습니다.")
-        edited = st.data_editor(df, num_rows="dynamic", use_container_width=True, key="editor")
 
-        st.subheader("참고 시세 · 판매처")
-        prices = load_prices()
-        for _, row in edited.iterrows():
-            name = str(row["품목"]).strip()
-            if not name:
-                continue
-            with st.expander(f"{name} × {row['수량']}"):
-                hit = prices[prices["품목"] == name] if not prices.empty and "품목" in prices else pd.DataFrame()
-                if hit.empty:
-                    st.info("시세 데이터 준비 중입니다. 아래 링크에서 비슷한 매물을 확인해 보세요.")
-                else:
-                    st.dataframe(hit, use_container_width=True, hide_index=True)
-                cols = st.columns(3)
-                for col, (site, url) in zip(cols, search_links(name).items()):
-                    col.link_button(f"{site}에서 보기", url)
-    else:
-        st.info("판매할 수 있는 집기를 찾지 못했습니다. 매장을 더 넓게 찍거나 나눠서 찍어 보세요.")
 
-    with st.expander("AI 처리 과정 보기 (개발·발표용)"):
-        st.write("**Florence-2 원본 탐지**")
-        st.dataframe(pd.DataFrame(last["det"]["objects"]), use_container_width=True, hide_index=True)
-        st.write("**품목 사전 탐지 중 검증 실패로 제외 (오탐 방지)**")
-        st.dataframe(pd.DataFrame(last["det"].get("rejected", [])), use_container_width=True, hide_index=True)
-        st.write("**코드 1차 필터에서 제외**")
-        st.dataframe(pd.DataFrame(last["dropped"]), use_container_width=True, hide_index=True)
-        st.write("**Gemini 2차 판별에서 제외**")
-        st.dataframe(pd.DataFrame(last["result"]["excluded"]), use_container_width=True, hide_index=True)
-        st.write("**이미지 재확인으로 바뀐 이름·고정 여부**")
-        st.dataframe(pd.DataFrame(last["result"].get("verified", [])), use_container_width=True, hide_index=True)
+def go_to(step):
+    st.switch_page(PAGES[step - 1])
 
+
+def apply_inventory_edit(last, rows, widget_key):
+    for index, fields in st.session_state[widget_key].get('edited_rows', {}).items():
+        if not 0 <= int(index) < len(rows):
+            continue
+        row = rows[int(index)]
+        name = str(fields.get('집기명', row['집기명']) or '').strip()
+        maker = str(fields.get('제조사', row['제조사']) or '').strip()
+        for oid in row['box_ids']:
+            if name:
+                last['box_names'][oid] = name
+                if name != row['집기명']:
+                    st.session_state[f'edit_input_{oid}'] = name
+            last.setdefault('manufacturers', {})[oid] = maker if maker != '미확인' else ''
+    last['table_revision'] = last.get('table_revision', 0) + 1
+
+
+def start_page():
+    st.header('남은 집기, 다음 가게로 이어주세요')
+    st.write('매장 사진을 올리면 AI가 집기를 정리합니다. 결과를 직접 고친 뒤 최종 목록을 확인하세요.')
+    st.markdown('**사진 입력 → AI 분석·직접 수정 → 최종 결과**')
+    upload, camera = st.columns(2)
+    if upload.button('📷 사진 올려 시작하기', type='primary', use_container_width=True):
+        st.session_state.input_method = '사진 올리기'
+        go_to(2)
+    if camera.button('📸 카메라로 시작하기', use_container_width=True):
+        st.session_state.input_method = '카메라로 찍기'
+        go_to(2)
+    if st.session_state.get('last') and st.button('이전 분석 이어서 수정하기'):
+        go_to(3)
+
+
+def photo_page():
+    st.header('사진을 준비해 주세요')
+    st.caption('집기가 잘 보이도록 매장을 넓게 찍어 주세요. JPG·PNG, 최대 10MB')
+    methods = ['사진 올리기', '카메라로 찍기']
+    source = st.radio('사진 입력', methods, index=methods.index(st.session_state.get('input_method', methods[0])), horizontal=True)
+    st.session_state.input_method = source
+    file = st.file_uploader('매장 사진', type=['jpg', 'jpeg', 'png']) if source == methods[0] else st.camera_input('매장을 넓게 찍어 주세요')
+    use_grounding = st.toggle('전문 장비 한 번 더 찾기', value=False) if vision.DETECTOR == 'florence' else False
+    if file is not None:
+        if file.size > MAX_UPLOAD_MB * 1024 * 1024:
+            st.error(f'{MAX_UPLOAD_MB}MB 이하 사진만 올릴 수 있습니다.')
+        else:
+            try:
+                image = vision.prepare(Image.open(file))
+            except Exception:
+                st.error('사진을 읽을 수 없습니다. JPG 또는 PNG 사진을 다시 선택해 주세요.')
+            else:
+                st.session_state.photo_draft = {'image': image}
+    if 'photo_draft' not in st.session_state and st.session_state.get('last'):
+        st.session_state.photo_draft = {'image': st.session_state.last['image']}
+    draft = st.session_state.get('photo_draft')
+    if draft:
+        image = draft['image']
+        st.image(image, caption='분석할 사진', use_container_width=True)
+        import hashlib
+        key = hashlib.md5(image.tobytes()).hexdigest() + str(use_grounding)
+        already = st.session_state.get('last', {}).get('key') == key
+        if already:
+            st.caption('이 사진의 분석 결과가 있습니다. 기존 수정 내용을 이어서 확인할 수 있어요.')
+        limit = st.session_state.get('runs', 0) >= MAX_RUNS_PER_SESSION
+        if st.button('분석 결과 이어보기' if already else 'AI 분석하기 →', type='primary', disabled=limit and not already):
+            if already:
+                go_to(3)
+            if not llm.get_api_key():
+                st.error('서버에 AI 키가 설정되지 않았습니다. 관리자에게 문의하세요.')
+            else:
+                analyze_photo(image, key, use_grounding)
+        if limit:
+            st.warning('이 화면에서 가능한 분석 횟수를 모두 사용했습니다.')
+    if st.button('← 시작 화면'):
+        go_to(1)
+
+
+def edit_inventory_table(last):
+    st.subheader('집기 목록 수정')
+    st.caption('집기명과 제조사는 표에서 수정하세요. 제조사가 불명확하면 미확인으로 두세요. 개수는 박스 추가·삭제에 맞춰 자동으로 계산됩니다.')
+    rows = inventory_rows(last)
+    if not rows:
+        st.info('목록이 비어 있습니다. 사진에서 영역을 지정해 물건을 추가할 수 있습니다.')
+        return
+    table = pd.DataFrame([{k: row[k] for k in ('집기명', '제조사', '개수')} for row in rows])
+    widget_key = f"inventory_{last['key']}_{last.get('table_revision', 0)}"
+    st.data_editor(table, hide_index=True, use_container_width=True, num_rows='fixed',
+                   disabled=['개수'], key=widget_key, on_change=apply_inventory_edit,
+                   args=(last, rows, widget_key),
+                   column_config={'집기명': st.column_config.TextColumn(required=True),
+                                  '제조사': st.column_config.TextColumn(),
+                                  '개수': st.column_config.NumberColumn(format='%d개')})
+
+
+def final_page(last):
+    st.header('최종 분석 · 매각 견적')
+    st.subheader('총 매각 예상 범위')
+    st.markdown('### — 원 ~ — 원')
+    st.caption('시세 데이터가 준비되면 표시됩니다. 현재 금액 칸은 비워두었습니다.')
+    rows = inventory_rows(last)
+    st.image(draw_boxes(last['image'], last['det']['objects'], last['box_names']),
+             caption='수정 내용이 반영된 최종 분석 사진', use_container_width=True)
+    st.subheader('최종 집기 목록')
+    table = pd.DataFrame([{k: row[k] for k in ('집기명', '제조사', '개수')} for row in rows],
+                         columns=['집기명', '제조사', '개수'])
+    st.dataframe(table, hide_index=True, use_container_width=True)
+    st.subheader('물품별 가격 · 시세')
+    prices = table.copy()
+    for column in ['개당 시세 하한 (원)', '개당 시세 상한 (원)', '예상 매각액 하한 (원)', '예상 매각액 상한 (원)']:
+        prices[column] = ''
+    st.dataframe(prices, hide_index=True, use_container_width=True)
+    st.download_button('최종 목록 CSV 내려받기', prices.to_csv(index=False).encode('utf-8-sig'),
+                       file_name='이어가게_최종목록.csv', mime='text/csv')
+    left, right = st.columns(2)
+    if left.button('← 분석 내용 다시 수정', use_container_width=True):
+        go_to(3)
+    if right.button('시작 화면으로', use_container_width=True):
+        go_to(1)
+
+
+def edit_screen():
+    last = st.session_state.get('last')
+    if not last:
+        go_to(2)
+    edit_page(last)
+    edit_inventory_table(last)
+    left, right = st.columns(2)
+    if left.button('← 사진 입력으로', use_container_width=True):
+        go_to(2)
+    if right.button('수정 완료 · 최종 견적 보기 →', type='primary', use_container_width=True):
+        go_to(4)
+
+
+def final_screen():
+    last = st.session_state.get('last')
+    if not last:
+        go_to(2)
+    final_page(last)
+
+
+# ---------------- 화면 ----------------
+PAGES = [st.Page(start_page, title='시작', default=True),
+         st.Page(photo_page, title='사진 입력', url_path='photo'),
+         st.Page(edit_screen, title='분석·수정', url_path='edit'),
+         st.Page(final_screen, title='최종 견적', url_path='estimate')]
+navigation = st.navigation(PAGES, position='hidden')
+st.title('🏪 이어가게')
+st.caption('매장 사진 한 장으로 남은 집기를 정리하고, 다음 가게로 이어줍니다.')
+st.session_state.setdefault('runs', 0)
+steps = ['시작', '사진 입력', '분석·수정', '최종 견적']
+step = steps.index(navigation.title) + 1
+st.caption('  →  '.join(f'● {name}' if i == step else name for i, name in enumerate(steps, 1)))
+st.progress(step / 4, text=f'{step} / 4 · {steps[step - 1]}')
+navigation.run()
 st.divider()
-st.caption("시세는 참고용이며 실제 거래가와 다를 수 있습니다. 올린 사진은 저장하지 않습니다.")
+st.caption('사진과 수정 내용은 현재 세션에서만 사용하며, 새로고침하거나 접속을 종료하면 초기화될 수 있습니다.')
