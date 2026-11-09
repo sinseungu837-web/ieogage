@@ -203,7 +203,8 @@ if file is not None:
 
     import hashlib
     key = hashlib.md5(image.tobytes()).hexdigest() + str(use_grounding)
-    if st.button("집기 분석하기", type="primary", disabled=runs >= MAX_RUNS_PER_SESSION):
+    already = st.session_state.get("last", {}).get("key") == key  # 같은 사진 재분석 방지 (안내 문구는 표시 안 함)
+    if st.button("집기 분석하기", type="primary", disabled=runs >= MAX_RUNS_PER_SESSION or already):
         if not take_daily_quota():
             st.error("오늘 서비스 전체 분석 한도에 도달했습니다. 내일 다시 이용해 주세요.")
             st.stop()
