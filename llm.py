@@ -11,7 +11,7 @@ from pathlib import Path
 from google import genai
 from google.genai import types
 
-PROMPT_FILE = Path(__file__).parent / "prompts" / "item_filter_v3.md"
+PROMPT_FILE = Path(__file__).parent / "prompts" / "item_filter_v4.md"
 DEFAULT_MODEL = "gemini-3.1-flash-lite"
 
 # 서로 헷갈리기 쉬운 장비 묶음: 이 이름으로 판별된 품목은 이미지로 다시 확인한다
@@ -138,8 +138,8 @@ def verify_ambiguous(image, objects: list[dict], result: dict, model: str | None
     by_id = {o["id"]: o for o in objects}
     targets = []  # (item, 대표 box id)
     for it in result["items"]:
-        if it["category"] == "기타":
-            continue
+        if it["category"] in ("기타", "재고·소모품"):
+            continue  # 장식·재고는 사진 재확인 대상에서 제외 (속도)
         low = any(by_id[i].get("score", 1.0) < LOW_CONF for i in it["source_ids"] if i in by_id)
         if _group_of(it["name"]) or it["uncertain"] or low:  # 헷갈리는 묶음·확인 필요·탐지 점수 낮음
             targets.append(it)
