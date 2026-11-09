@@ -11,6 +11,9 @@ os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
 import torch
 from PIL import Image
 # transformers 는 Florence 를 쓸 때만 불러온다 (RF-DETR 과 필요한 버전이 달라서)
+from pathlib import Path as _P
+from dotenv import load_dotenv as _ld
+_ld(_P(__file__).parent / ".env")  # 로컬 .env 의 DETECTOR 설정을 먼저 읽음 (서버는 없음 → rfdetr)
 DETECTOR = os.environ.get("DETECTOR", "rfdetr")  # "rfdetr" | "florence"
 RFDETR_THRESHOLD = 0.35  # 이 점수 미만 박스는 버림
 LOW_CONF = 0.5  # 이 점수 미만은 '애매함' → Gemini 사진 재확인 대상
