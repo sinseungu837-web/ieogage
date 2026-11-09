@@ -13,12 +13,7 @@ from PIL import Image, ImageDraw, ImageFont
 import llm
 import vision
 
-# 사진 클릭 좌표 감지 패키지 (설치되어 있으면 마우스 클릭 모드, 없으면 슬라이더로 대체)  [소정]
-try:
-    from streamlit_image_coordinates import streamlit_image_coordinates
-    HAS_CLICK_COMPONENT = True
-except ImportError:
-    HAS_CLICK_COMPONENT = False
+from box_selector import select_box, validated_box
 
 BASE = Path(__file__).parent
 load_dotenv(BASE / ".env")
@@ -106,7 +101,7 @@ def draw_boxes(
     selected_id: int | None = None,
     pending_box: list[float] | None = None,
 ) -> Image.Image:
-    """객체 탐지 결과 + 번호표([#id]) + 사용자가 클릭 중인 새 박스 영역을 그린다."""
+    """객체 탐지 결과와 번호표([#id])를 그린다."""
     img = image.copy()
     d = ImageDraw.Draw(img)
     W, H = img.size
@@ -246,7 +241,7 @@ if file is not None:
             # [소정] 사용자 직접 수정용 상태: 박스 번호별 품목명, 새 박스 번호, 클릭 위치, 선택 박스
             "box_names": {i: it["name"] for it in result["items"] for i in it["source_ids"]},
             "next_id": max([o["id"] for o in det["objects"]], default=0) + 1,
-            "clicked_pt": None,
+            "pending_box": None,
             "selected_box_id": None,
         }
         st.rerun()
@@ -264,66 +259,40 @@ if last:
     st.subheader("인식된 집기 (클릭하여 직접 수정·추가 가능)")
     st.caption(
         "💡 **잘못 인식된 박스**나 **AI가 놓친 물건**이 있나요? "
-        "사진 위 해당 위치를 직접 클릭하거나 아래 수정 탭에서 자연어로 바로 고칠 수 있습니다."
+        "기존 박스는 눌러 수정하고, 놓친 물건은 영역을 드래그해 추가할 수 있습니다."
     )
 
-    # 사용자가 찍은 좌표가 있을 때 생성할 새 박스 크기 비율 조절
-    box_size_pct = st.session_state.get("new_box_size_pct", 14)
-    pending_box = None
-    if last.get("clicked_pt"):
-        cx, cy = last["clicked_pt"]
-        half_w = int(W * (box_size_pct / 100) / 2)
-        half_h = int(H * (box_size_pct / 100) / 2)
-        pending_box = [
-            max(0, cx - half_w),
-            max(0, cy - half_h),
-            min(W, cx + half_w),
-            min(H, cy + half_h),
-        ]
-
+    mode = st.radio(
+        "사진 조작", ["기존 박스 선택", "새 물건 영역 그리기"], horizontal=True,
+        key=f"canvas_mode_{last['key']}",
+    )
+    pending_box = last.get("pending_box")
     rendered_img = draw_boxes(
-        last["image"],
-        objects,
-        box_names,
-        selected_id=last.get("selected_box_id"),
-        pending_box=pending_box,
+        last["image"], objects, box_names, selected_id=last.get("selected_box_id"),
     )
-
-    # 사진 표시: streamlit-image-coordinates 설치 시 클릭 좌표 즉시 획득
-    if HAS_CLICK_COMPONENT:
-        click_val = streamlit_image_coordinates(rendered_img, key="interactive_canvas", use_column_width=True)
-        if click_val is not None:
-            # 화면에 표시된 크기와 원본 이미지 크기 비율 보정
-            disp_w = click_val.get("width") or W
-            scale = W / disp_w
-            real_x = int(click_val["x"] * scale)
-            real_y = int(click_val["y"] * scale)
-            new_pt = (real_x, real_y)
-
-            if last.get("last_raw_click") != new_pt:
-                last["last_raw_click"] = new_pt
-                # 클릭한 위치에 이미 기존 박스가 있는지 확인 (작은 박스 우선 선택)
-                hit_ids = [
-                    o["id"] for o in objects
-                    if o["id"] in box_names
-                    and o["box"][0] <= real_x <= o["box"][2]
-                    and o["box"][1] <= real_y <= o["box"][3]
-                ]
-                if hit_ids:
-                    hit_ids.sort(
-                        key=lambda i: next(
-                            (o["box"][2] - o["box"][0]) * (o["box"][3] - o["box"][1])
-                            for o in objects if o["id"] == i
-                        )
-                    )
-                    last["selected_box_id"] = hit_ids[0]
-                    last["clicked_pt"] = None
-                else:
-                    last["clicked_pt"] = new_pt
-                    last["selected_box_id"] = None
+    event = select_box(
+        rendered_img, mode="draw" if mode == "새 물건 영역 그리기" else "select",
+        pending_box=pending_box,
+        reset_token=f"{last['key']}:{last.get('canvas_revision', 0)}:{mode}",
+        key=f"interactive_canvas_{last['key']}",
+    )
+    if event and event.get("event_id") != last.get("canvas_event_id"):
+        last["canvas_event_id"] = event.get("event_id")
+        if event.get("kind") == "box" and mode == "새 물건 영역 그리기":
+            new_box = validated_box(event.get("box"), W, H)
+            if new_box:
+                last["pending_box"] = new_box
                 st.rerun()
-    else:
-        st.image(rendered_img, use_container_width=True)
+        elif event.get("kind") == "click" and mode == "기존 박스 선택":
+            x, y = event["x"], event["y"]
+            hits = [o for o in objects if o["id"] in box_names
+                    and o["box"][0] <= x <= o["box"][2]
+                    and o["box"][1] <= y <= o["box"][3]]
+            if hits:
+                selected = min(hits, key=lambda o: (o["box"][2]-o["box"][0]) * (o["box"][3]-o["box"][1]))["id"]
+                last["selected_box_id"] = selected
+                st.session_state[f"edit_box_{last['key']}"] = selected
+                st.rerun()
 
     # 사용자가 수정한 내역을 바탕으로 items 실시간 재계산
     items = rebuild_items_from_boxes(objects, box_names, last["result"]["items"])
@@ -357,6 +326,7 @@ if last:
                 )
                 sel_id = st.selectbox(
                     "수정하거나 삭제할 박스 번호([#번호])를 선택하세요 (사진 위 박스를 직접 클릭해도 선택됩니다)",
+                    key=f"edit_box_{last['key']}",
                     options=active_ids,
                     index=default_idx,
                     format_func=lambda x: f"[#{x}] {box_names[x]}",
@@ -391,23 +361,15 @@ if last:
 
         # 탭 2: AI가 놓친 물건을 클릭 + 자연어로 새로 추가
         with tab_add:
-            if HAS_CLICK_COMPONENT:
-                st.caption("👆 위 사진에서 **AI가 놓친 물건의 위치**를 마우스로 클릭하면 초록색 미리보기 박스가 생깁니다.")
+            st.caption("위 사진에서 ‘새 물건 영역 그리기’를 선택한 뒤, 마우스나 손가락으로 물건을 감싸는 사각형을 그려 주세요. 기존 박스와 겹쳐도 추가할 수 있습니다.")
+            if pending_box:
+                st.success("영역이 선택되었습니다. 품목명을 입력해 추가하세요. 다시 그리면 영역이 바뀝니다.")
+                if st.button("선택 영역 지우기"):
+                    last["pending_box"] = None
+                    last["canvas_revision"] = last.get("canvas_revision", 0) + 1
+                    st.rerun()
             else:
-                st.caption("💡 아래 슬라이더로 사진 속 놓친 물건의 위치(가로/세로)를 맞춘 뒤 품목명을 입력해 주세요.")
-
-            c_pos1, c_pos2, c_pos3 = st.columns(3)
-            cur_x, cur_y = last["clicked_pt"] if last.get("clicked_pt") else (W // 2, H // 2)
-            with c_pos1:
-                manual_x = st.slider("가로 위치 (X)", 0, W, int(cur_x), key="slider_x")
-            with c_pos2:
-                manual_y = st.slider("세로 위치 (Y)", 0, H, int(cur_y), key="slider_y")
-            with c_pos3:
-                st.slider("박스 크기 (%)", 5, 40, box_size_pct, key="new_box_size_pct")
-
-            # 슬라이더를 움직였을 때도 미리보기 위치 연동
-            if (manual_x, manual_y) != last.get("clicked_pt"):
-                last["clicked_pt"] = (manual_x, manual_y)
+                st.info("먼저 사진 위에서 추가할 물건의 영역을 그려 주세요.")
 
             add_col1, add_col2 = st.columns([3, 1])
             with add_col1:
@@ -423,13 +385,16 @@ if last:
                     cleaned_name = normalize_natural_input(natural_add_text)
                     if not cleaned_name:
                         st.warning("추가할 물건의 이름을 입력해 주세요!")
+                    elif not pending_box:
+                        st.warning("사진 위에서 추가할 물건의 영역을 먼저 그려 주세요.")
                     else:
                         new_id = last["next_id"]
-                        box = pending_box or [max(0, manual_x - 40), max(0, manual_y - 40), min(W, manual_x + 40), min(H, manual_y + 40)]
+                        box = pending_box
                         objects.append({"id": new_id, "label": cleaned_name, "box": [float(v) for v in box], "task": "USER"})
                         box_names[new_id] = cleaned_name
                         last["next_id"] = new_id + 1
-                        last["clicked_pt"] = None
+                        last["pending_box"] = None
+                        last["canvas_revision"] = last.get("canvas_revision", 0) + 1
                         st.toast(f"[#{new_id}] '{cleaned_name}' 을(를) 추가했습니다.")
                         st.rerun()
 
