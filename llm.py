@@ -11,14 +11,14 @@ from pathlib import Path
 from google import genai
 from google.genai import types
 
-PROMPT_FILE = Path(__file__).parent / "prompts" / "item_filter_v2.md"
+PROMPT_FILE = Path(__file__).parent / "prompts" / "item_filter_v3.md"
 DEFAULT_MODEL = "gemini-3.1-flash-lite"
 
 # 서로 헷갈리기 쉬운 장비 묶음: 이 이름으로 판별된 품목은 이미지로 다시 확인한다
 CONFUSABLE = {
-    "커피 장비": ["에스프레소 머신", "커피 그라인더", "커피머신", "블렌더", "정수기", "제빙기"],
+    "커피 장비": ["에스프레소 머신", "커피 그라인더", "커피머신", "블렌더", "정수기", "제빙기", "포스기", "키오스크"],
     "냉장·보관": ["업소용 냉장고", "테이블 냉장고", "쇼케이스 냉장고", "업소용 냉동고", "수납장", "하부장", "선반"],
-    "조명": ["조명 스탠드", "펜던트 조명"],
+    "조명": ["조명 스탠드", "펜던트 조명", "레일 조명"],
 }
 MAX_CROPS = 8
 LOW_CONF = 0.5  # 탐지 점수(RF-DETR)가 이 미만이면 사진으로 재확인  # 이미지 재확인 상한 (속도·무료 사용량 보호)
@@ -57,29 +57,32 @@ def _client():
     """클라이언트를 재사용 (임시 객체로 쓰면 요청 중에 닫히는 문제)."""
     global _CLIENT
     if _CLIENT is None:
-        _CLIENT = genai.Client(api_key=get_api_key())
+        # 1회 호출 최대 20초. 넘으면 재시도/대체 모델로 (보완 단계가 2분씩 걸리던 문제)
+        _CLIENT = genai.Client(api_key=get_api_key(), http_options=types.HttpOptions(timeout=20000))
     return _CLIENT
 
 
 def _generate(**kw):
-    """Gemini 호출. 일시 과부하(503)·사용량 초과(429)는 재시도 후 다른 경량 모델로 대체."""
+    """Gemini 호출. 과부하(503)·사용량 초과(429)·시간 초과는 기본 모델 1회 재시도 후 대체 모델 1회."""
     import time
     from google.genai import errors
-    models = [kw.pop("model")] + [m for m in FALLBACK_MODELS]
+    first = kw.pop("model")
+    plan = [first, first] + [m for m in FALLBACK_MODELS if m != first][:1]
     last = None
-    for m in dict.fromkeys(models):
-        for attempt in range(2):
-            try:
-                return _client().models.generate_content(model=m, **kw)
-            except (errors.ServerError, errors.ClientError) as e:
-                if getattr(e, "code", None) not in (429, 500, 503):
-                    raise
-                last = e
-                time.sleep(2 * (attempt + 1))
+    for n, m in enumerate(plan):
+        try:
+            return _client().models.generate_content(model=m, **kw)
+        except (errors.ServerError, errors.ClientError) as e:
+            if getattr(e, "code", None) not in (429, 500, 503, 504):
+                raise
+            last = e
+        except Exception as e:  # 시간 초과 등 네트워크 오류
+            last = e
+        if n == 0:
+            time.sleep(1)
     raise last
 
-
-FALLBACK_MODELS = ["gemini-3.5-flash-lite", "gemini-flash-lite-latest"]
+FALLBACK_MODELS = ["gemini-flash-lite-latest", "gemini-3.5-flash-lite"]
 
 def _model(model):
     return model or os.environ.get("GEMINI_MODEL", DEFAULT_MODEL)
@@ -212,7 +215,8 @@ def find_missing(image, result: dict, objects: list[dict], model: str | None = N
     img.convert("RGB").save(buf, "JPEG", quality=85)
     instruction = (
         "폐업 매장 사진이다. 아래 '이미 찾은 품목' 외에, 중고로 팔 수 있는 업소용 장비·가구·가전 중 "
-        "사진에 분명히 보이는데 빠진 것만 찾아라. 사람·건물·고정된 카운터·소모품·음식·장식은 제외. "
+        "사진에 분명히 보이는데 빠진 것만 찾아라. 사람·건물·고정된 카운터·천장 매립형 에어컨·레일 조명·소모품·음식·장식은 제외. "
+        "화면이 달린 기계는 커피머신인지 포스기인지 구분해서 이름을 붙여라. "
         "보이지 않는 물건은 절대 추가하지 말 것.\n"
         f"이미 찾은 품목: {', '.join(found) or '없음'}\n"
         f"품목 이름은 가능하면 다음 사전에서: {p['dictionary']}\n"

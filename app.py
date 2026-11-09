@@ -154,20 +154,20 @@ if file is not None:
                 st.caption(type(e).__name__)
                 st.stop()
         T["Gemini 판별"] = _t.time() - _s; _s = _t.time()
-        with st.spinner("③ 헷갈리는 장비만 이미지로 다시 확인하는 중 (Gemini)..."):
-            try:
-                result = llm.verify_ambiguous(image, kept, result)
-            except Exception:
-                result["verified"] = []  # 재확인 실패 시 1차 판별 결과를 그대로 사용
-        T["Gemini 재확인"] = _t.time() - _s; _s = _t.time()
-        with st.spinner("④ 놓친 장비를 찾는 중 (Gemini가 사진 전체 확인)..."):
+        with st.spinner("③ 놓친 장비를 찾는 중 (Gemini가 사진 전체 확인)..."):
             try:
                 new_objs, new_items = llm.find_missing(image, result, det["objects"])
                 det["objects"] += new_objs
                 result["items"] += new_items
             except Exception:
                 pass  # 보완 실패 시 기존 결과 유지
-        T["Gemini 보완"] = _t.time() - _s
+        T["Gemini 보완"] = _t.time() - _s; _s = _t.time()
+        with st.spinner("④ 헷갈리는 장비만(보완 결과 포함) 이미지로 다시 확인하는 중 (Gemini)..."):
+            try:
+                result = llm.verify_ambiguous(image, kept + [o for o in det["objects"] if o.get("task") == "GEMINI"], result)
+            except Exception:
+                result["verified"] = []  # 재확인 실패 시 1차 판별 결과를 그대로 사용
+        T["Gemini 재확인"] = _t.time() - _s
         det["timing"] = {k: round(v, 1) for k, v in T.items()}
         st.session_state.last = {"key": key, "image": image, "det": det, "kept": kept, "dropped": dropped,
                                  "result": result}
