@@ -1,4 +1,4 @@
-"""Florence-2-base 탐지 + 카운터 주변 자동 줌인(Zoom-in)으로 소형 커피머신·그라인더 정밀 포착."""
+"""1단계 물체 탐지. 기본은 RF-DETR nano(빠름), DETECTOR=florence 로 Florence-2-base(카운터 줌인 포함)로 되돌릴 수 있다."""
 from __future__ import annotations
 
 import os
@@ -10,8 +10,10 @@ os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
 
 import torch
 from PIL import Image
-from transformers import AutoModelForCausalLM, AutoProcessor
-from transformers.dynamic_module_utils import get_imports
+# transformers 는 Florence 를 쓸 때만 불러온다 (RF-DETR 과 필요한 버전이 달라서)
+DETECTOR = os.environ.get("DETECTOR", "rfdetr")  # "rfdetr" | "florence"
+RFDETR_THRESHOLD = 0.35  # 이 점수 미만 박스는 버림
+LOW_CONF = 0.5  # 이 점수 미만은 '애매함' → Gemini 사진 재확인 대상
 
 MODEL_ID = "microsoft/Florence-2-base"
 MAX_SIDE = 1024  # 멀리 있는 작은 그라인더도 선명하게 보이도록 1024 화질 유지
@@ -59,13 +61,15 @@ DEVICE = _get_device()
 
 
 def _no_flash_attn(filename):
+    from transformers.dynamic_module_utils import get_imports
     imports = get_imports(filename)
     if str(filename).endswith("modeling_florence2.py") and "flash_attn" in imports:
         imports.remove("flash_attn")
     return imports
 
 
-def load_model():
+def _load_florence():
+    from transformers import AutoModelForCausalLM, AutoProcessor
     torch.set_num_threads(os.cpu_count() or 4)
     # MPS에서 간혹 float16이 느려지거나 오류가 나는 경우를 방지하기 위해 안정적인 설정 적용
     dtype = torch.float16 if DEVICE == "cuda" else torch.float32
@@ -75,6 +79,29 @@ def load_model():
         ).to(DEVICE).eval()
     processor = AutoProcessor.from_pretrained(MODEL_ID, trust_remote_code=True)
     return model, processor
+
+
+# ---------------- RF-DETR nano (기본) ----------------
+def load_model():
+    """(모델, 프로세서). RF-DETR 은 프로세서가 없어 None."""
+    if DETECTOR == "florence":
+        return _load_florence()
+    from rfdetr import RFDETRNano
+    torch.set_num_threads(os.cpu_count() or 4)
+    return RFDETRNano(), None
+
+
+def detect(model, processor, image: Image.Image, use_grounding: bool = False) -> dict:
+    if DETECTOR == "florence":
+        return _detect_florence(model, processor, image, use_grounding)
+    from rfdetr.utilities.class_names import COCO_CLASSES
+    t0 = time.time()
+    d = model.predict(image, threshold=RFDETR_THRESHOLD)
+    objs = []
+    for i, (box, cid, score) in enumerate(zip(d.xyxy, d.class_id, d.confidence)):
+        objs.append({"id": i, "label": COCO_CLASSES[int(cid)], "box": [round(float(v), 1) for v in box],
+                     "task": "RFDETR", "score": round(float(score), 2)})
+    return {"objects": objs, "rejected": [], "seconds": round(time.time() - t0, 1), "truncated": False}
 
 
 def prepare(image: Image.Image) -> Image.Image:
@@ -128,7 +155,7 @@ def _find_work_zones(objs: list[dict], image_size: tuple[int, int]) -> list[tupl
     return zones[:2]
 
 
-def detect(model, processor, image: Image.Image, use_grounding: bool = True) -> dict:
+def _detect_florence(model, processor, image: Image.Image, use_grounding: bool = True) -> dict:
     """1) 기본 탐지 -> 2) 분리형 전문장비 탐색 -> 3) 카운터 영역 줌인(Zoom-in) 정밀 탐색."""
     t0 = time.time()
     objs, rejected, truncated = [], [], False

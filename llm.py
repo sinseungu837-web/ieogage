@@ -20,7 +20,8 @@ CONFUSABLE = {
     "냉장·보관": ["업소용 냉장고", "테이블 냉장고", "쇼케이스 냉장고", "업소용 냉동고", "수납장", "하부장", "선반"],
     "조명": ["조명 스탠드", "펜던트 조명"],
 }
-MAX_CROPS = 8  # 이미지 재확인 상한 (속도·무료 사용량 보호)
+MAX_CROPS = 8
+LOW_CONF = 0.5  # 탐지 점수(RF-DETR)가 이 미만이면 사진으로 재확인  # 이미지 재확인 상한 (속도·무료 사용량 보호)
 
 
 def _section(text: str, name: str) -> str:
@@ -135,7 +136,8 @@ def verify_ambiguous(image, objects: list[dict], result: dict, model: str | None
     for it in result["items"]:
         if it["category"] == "기타":
             continue
-        if _group_of(it["name"]) or it["uncertain"]:
+        low = any(by_id[i].get("score", 1.0) < LOW_CONF for i in it["source_ids"] if i in by_id)
+        if _group_of(it["name"]) or it["uncertain"] or low:  # 헷갈리는 묶음·확인 필요·탐지 점수 낮음
             targets.append(it)
     targets = targets[:MAX_CROPS]
     if not targets:
