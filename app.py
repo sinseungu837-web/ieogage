@@ -190,6 +190,25 @@ def analyze_photo(image, key):
     model, processor = get_vision()
     T["모델 준비"] = _t.time() - T.pop("load")
     _s = _t.time()
+    if vision.DETECTOR == "gemini":  # [실험] Gemini 단독 탐지: 1회 호출로 탐지·이름·분류까지
+        with st.spinner("사진 전체에서 판매할 물건을 찾는 중 (Gemini)..."):
+            try:
+                det, result = llm.detect_all(image)
+            except Exception as e:
+                st.error("AI 분석 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.")
+                st.caption(type(e).__name__)
+                st.stop()
+        T["Gemini 탐지"] = _t.time() - _s
+        det["timing"] = {k: round(v, 1) for k, v in T.items()}
+        st.session_state.last = {
+            "key": key, "image": image, "det": det, "kept": det["objects"], "dropped": [], "result": result,
+            "box_names": {i: it["name"] for it in result["items"] for i in it["source_ids"]},
+            "next_id": max([o["id"] for o in det["objects"]], default=0) + 1,
+            "pending_box": None,
+            "selected_box_id": None,
+        }
+        go_to(3)
+        return
     with st.spinner("① 사진에서 물체를 찾는 중 (RF-DETR)..."):
         det = vision.detect(model, processor, image)
     kept, dropped = vision.code_filter(det["objects"], image.size)

@@ -1,15 +1,17 @@
-"""1단계 물체 탐지: RF-DETR nano (COCO 80종) + 코드 1차 필터."""
+"""1단계 물체 탐지. DETECTOR=gemini(기본, 실험 중): Gemini 단독 탐지 / DETECTOR=rfdetr: RF-DETR nano + 코드 필터."""
 from __future__ import annotations
 
 import os
 import time
 from pathlib import Path
 
-import torch
 from dotenv import load_dotenv
 from PIL import Image
 
 load_dotenv(Path(__file__).parent / ".env")  # 로컬 .env (GEMINI_API_KEY 등). 서버는 Secrets 사용
+
+# 탐지 방식 스위치: "gemini" = Gemini 혼자 사진 전체 탐지(2026-11-11 실험, 기본) / "rfdetr" = RF-DETR 1차 탐지
+DETECTOR = os.environ.get("DETECTOR", "gemini")
 
 RFDETR_THRESHOLD = 0.35  # 이 점수 미만 박스는 버림
 LOW_CONF = 0.5  # 이 점수 미만은 '애매함' → Gemini 사진 재확인 대상
@@ -51,7 +53,10 @@ def _cpu_limit() -> int:
 
 
 def load_model():
-    """(모델, 프로세서). RF-DETR 은 프로세서가 없어 None."""
+    """(모델, 프로세서). Gemini 단독 모드는 로컬 모델이 없어 (None, None)."""
+    if DETECTOR == "gemini":
+        return None, None
+    import torch
     from rfdetr import RFDETRNano
     torch.set_num_threads(_cpu_limit())
     return RFDETRNano(), None

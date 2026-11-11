@@ -258,3 +258,58 @@ def _overlap(a, b) -> float:
     inter = max(0, x2 - x1) * max(0, y2 - y1)
     area = lambda r: max(1e-6, (r[2] - r[0]) * (r[3] - r[1]))
     return inter / min(area(a), area(b))
+
+
+
+def detect_all(image, model: str | None = None) -> tuple[dict, dict]:
+    """[Gemini 단독 모드] 사진 전체를 1회 보고 판매 대상 물건을 박스·이름·분류와 함께 모두 찾는다.
+    반환: (det, result) — 기존 RF-DETR 경로와 같은 형식이라 화면 코드를 그대로 쓴다."""
+    import time
+    t0 = time.time()
+    p = load_prompt()
+    img = image.copy()
+    img.thumbnail((1024, 1024))
+    buf = io.BytesIO()
+    img.convert("RGB").save(buf, "JPEG", quality=85)
+    instruction = "\n".join([
+        "폐업을 앞둔 매장(카페·음식점) 사진이다. 중고로 팔 수 있는 물건을 사진에서 빠짐없이 찾아라.",
+        "- 같은 물건이 여러 개면 하나하나 따로 박스를 그린다 (의자 6개면 6개).",
+        "- 사람, 벽·바닥·천장·창문·문, 꽃·식물, 먹다 남은 음식, 글자·간판 문구는 제외.",
+        '- category: 장비·가구·가전은 "집기", 컵·식기·원두·시럽·과자·빵·케이크·병 음료 등은 "재고·소모품", 꽃병·액자·소형 장식은 "기타".',
+        "- 카운터·하부장·천장 매립형 에어컨·레일 조명처럼 붙어 있어 떼어 팔기 어려우면 fixed=true.",
+        "- 화면이 달린 기계는 커피머신·포스기·키오스크·TV·디지털 메뉴보드 중 무엇인지 구분.",
+        "- 확실하지 않으면 uncertain=true. 보이지 않는 물건은 절대 추가하지 말 것. 가격·브랜드는 쓰지 말 것.",
+        f"- 품목 이름은 가능하면 다음 사전에서: {p['dictionary']}",
+        "box_2d=[ymin,xmin,ymax,xmax] (0~1000 정규화). JSON 만:",
+        '{"items":[{"name":"...","category":"집기","box_2d":[0,0,0,0],"fixed":false,"uncertain":false}]}',
+    ])
+    resp = _generate(
+        model=_model(model), contents=[instruction, types.Part.from_bytes(data=buf.getvalue(), mime_type="image/jpeg")],
+        config=types.GenerateContentConfig(temperature=0.1, response_mime_type="application/json"),
+    )
+    out = json.loads(resp.text)
+    if isinstance(out, list):
+        out = {"items": out}
+    W, H = image.size
+    objs, groups = [], {}
+    for it in out.get("items", []):
+        name, b = str(it.get("name", "")).strip(), it.get("box_2d")
+        if not name or not (isinstance(b, list) and len(b) == 4):
+            continue  # 박스 근거가 없는 품목은 버림 (지어낸 물건 차단)
+        y1, x1, y2, x2 = [float(v) for v in b]
+        box = [x1 * W / 1000, y1 * H / 1000, x2 * W / 1000, y2 * H / 1000]
+        if box[2] - box[0] < 6 or box[3] - box[1] < 6:
+            continue
+        if any(o["label"] == name and _overlap(box, o["box"]) > 0.7 for o in objs):
+            continue  # 같은 물건을 두 번 그린 경우
+        oid = len(objs)
+        objs.append({"id": oid, "label": name, "box": [round(v, 1) for v in box], "task": "GEMINI"})
+        g = groups.setdefault(name, {"ids": [], "cat": it.get("category", "집기"), "unc": False, "fixed": False})
+        g["ids"].append(oid)
+        g["unc"] |= bool(it.get("uncertain"))
+        g["fixed"] |= bool(it.get("fixed"))
+    items = [{"name": n, "count": len(g["ids"]), "source_ids": g["ids"], "in_dictionary": n in p["dictionary"],
+              "uncertain": g["unc"] or g["fixed"], "category": g["cat"] if g["cat"] in ("집기", "재고·소모품", "기타") else "집기",
+              **({"note": "고정 설비 의심"} if g["fixed"] else {})} for n, g in groups.items()]
+    det = {"objects": objs, "rejected": [], "seconds": round(time.time() - t0, 1), "truncated": False}
+    return det, {"items": items, "excluded": [], "verified": []}
