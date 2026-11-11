@@ -133,13 +133,13 @@ def crawl(name, urls, item, registry=SOURCES):
     return rows
 
 
-def collect_onbid():
+def collect_onbid(diagnostics=None):
     import price
     if not price._key():
-        raise ValueError('DATA_GO_KR_KEY가 없어 온비드 수집을 실행할 수 없습니다')
+        raise MissingAPIKey('MISSING_API_KEY: DATA_GO_KR_KEY')
     rows = []
     for name in listings.ITEM_WORDS:
-        for record in price.evidence(name):
+        for record in price.evidence(name, diagnostics=diagnostics):
             # 물건관리번호가 없는 API 기록은 안정적인 원본 식별 불가.
             if not record['물건관리번호']:
                 continue
@@ -151,10 +151,50 @@ def collect_onbid():
     return rows
 
 
+class MissingAPIKey(ValueError):
+    pass
+
+
+REVIEW_COLUMNS = ['verified_at', 'reviewed_by', 'verification_note']
+
+
+def import_manual(path, output=listings.LISTINGS, table_path=listings.BASE / 'price_table.csv',
+                  audit_path=listings.BASE / 'manual_reviews.csv'):
+    """원문을 직접 검증한 사실 데이터 입력. 웹 요청/자동 수집 허용 등록과 분리."""
+    import pandas as pd
+    frame = pd.read_csv(path, dtype=str, keep_default_na=False)
+    if not set(listings.COLUMNS + REVIEW_COLUMNS) <= set(frame.columns):
+        raise ValueError('수동 CSV 필수 열 또는 검증 메타데이터 누락')
+    rows = frame.to_dict('records')
+    for row in rows:
+        verified = date.fromisoformat(row['verified_at'])
+        if not 0 <= (listings.today() - verified).days <= 30:
+            raise ValueError('수동 검증일은 최근 30일 이내여야 합니다')
+        if row['is_sample'] != 'false' or not row['reviewed_by'].strip() or not row['verification_note'].strip():
+            raise ValueError('실데이터 표시·검증자·원문 확인 메모가 필요합니다')
+        if row['collected_at'][:10] != row['verified_at']:
+            raise ValueError('수집일은 원문을 확인한 검증일과 같아야 합니다')
+    decisions = []
+    accepted = listings.normalize(rows, decisions)
+    n = listings.save(accepted.to_dict('records'), output, table_path)
+    if n:
+        accepted_lines = {d['row'] for d in decisions if d['status'] == 'accepted'}
+        metadata = {listings.canonical_url(r['url']): r for i, r in enumerate(rows, start=2) if i in accepted_lines}
+        audit = [r | {key: metadata[r['url']][key] for key in REVIEW_COLUMNS}
+                 for r in accepted.to_dict('records')]
+        target = Path(audit_path)
+        old = pd.read_csv(target, dtype=str, keep_default_na=False).to_dict('records') if target.exists() else []
+        merged = pd.DataFrame(old + audit, columns=listings.COLUMNS + REVIEW_COLUMNS)
+        merged = merged.drop_duplicates(['url', 'verified_at'], keep='last')
+        listings.atomic_csv(merged, target)
+    return {'input_records': len(rows), 'accepted': n, 'decisions': decisions}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='command', required=True)
-    sub.add_parser('onbid')
+    onbid = sub.add_parser('onbid')
+    onbid.add_argument('--report')
     web = sub.add_parser('crawl')
     web.add_argument('--source', required=True)
     web.add_argument('--item', required=True, choices=list(listings.ITEM_WORDS))
@@ -162,10 +202,35 @@ def main():
     imported = sub.add_parser('import-csv')
     imported.add_argument('file')
     imported.add_argument('--source', required=True)
+    manual = sub.add_parser('import-manual')
+    manual.add_argument('file')
+    diagnose = sub.add_parser('diagnose')
+    diagnose.add_argument('--file', default=str(listings.LISTINGS))
+    diagnose.add_argument('--item', default='')
+    for field in ('manufacturer', 'model', 'spec', 'condition'):
+        diagnose.add_argument('--' + field, default='')
     args = parser.parse_args()
     try:
+        if args.command == 'diagnose':
+            from data_diagnostics import diagnose
+            print(json.dumps(diagnose(args.file, name=args.item, manufacturer=args.manufacturer,
+                model=args.model, spec=args.spec, condition=args.condition), ensure_ascii=False, indent=2))
+            return 0
+        if args.command == 'import-manual':
+            print(json.dumps(import_manual(args.file), ensure_ascii=False, indent=2))
+            return 0
         if args.command == 'onbid':
-            rows = collect_onbid()
+            report = []
+            rows = collect_onbid(diagnostics=report)
+            successful = [entry for entry in report if entry.get('status') == 'OK']
+            status = 'OK' if rows else ('API_REQUEST_FAILED' if not successful else
+                ('FILTERED_ALL_RECORDS' if any(entry.get('api_records', 0) for entry in successful) else 'API_RETURNED_ZERO_RECORDS'))
+            summary = {'status': status, 'accepted_before_csv': len(rows), 'queries': report}
+            print(json.dumps(summary, ensure_ascii=False, indent=2))
+            if args.report:
+                Path(args.report).write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
+            if status == 'API_REQUEST_FAILED':
+                return 1
         elif args.command == 'crawl':
             rows = crawl(args.source, args.urls, args.item)
         else:
@@ -175,6 +240,11 @@ def main():
                 raise ValueError('CSV 출처 또는 원본 도메인 불일치')
         n = listings.save(rows)
         print(f'유효 매물 {n}건 반영' if n else '유효 신규 매물 0건 · 기존 DB 유지')
+    except MissingAPIKey:
+        if getattr(args, 'report', None):
+            Path(args.report).write_text(json.dumps({'status': 'MISSING_API_KEY', 'api_records': None}), encoding='utf-8')
+        print('MISSING_API_KEY: DATA_GO_KR_KEY 미설정 · API 미조회 (매물 부족과 다름) · 기존 DB 유지')
+        return 1
     except Exception as exc:
         # API 오류 메시지는 키가 포함된 URL을 담을 수 있어 원문을 출력하지 않는다.
         print(f'수집 실패 ({type(exc).__name__}) · 기존 DB 유지. 출처 정책/설정/키를 확인하세요.')

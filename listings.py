@@ -19,7 +19,8 @@ TABLE_COLUMNS = ['품목', '브랜드', '모델', '연식구간', '상태', '신
 ALIASES = {'에스프레소머신': '커피머신', '에스프레소 머신': '커피머신', '커피 머신': '커피머신',
            '그라인더': '커피 그라인더', '커피그라인더': '커피 그라인더',
            '냉장고': '업소용 냉장고', '카페 테이블': '테이블', '카페 의자': '의자'}
-MAKERS = {'lamarzocco': '라마르조코', '라 마르조코': '라마르조코',
+MAKERS = {'라마르조꼬': '라마르조코', '카이져': '카이저', '카이저제빙기': '카이저',
+          '네오트제빙기': '네오트', 'lamarzocco': '라마르조코', '라 마르조코': '라마르조코',
           'nuovasimonelli': '누오바시모넬리', 'mazzer': '메저', '메져': '메저',
           'hoshizaki': '호시자키', 'scotsman': '스코츠맨'}
 ITEM_WORDS = {'커피머신': ['커피머신', '에스프레소'], '커피 그라인더': ['그라인더'],
@@ -57,42 +58,73 @@ def canonical_url(value):
     return urlunsplit((u.scheme, u.netloc.lower(), u.path.rstrip('/'), urlencode(sorted(query)), ''))
 
 
-def normalize(rows):
-    """보수적 개별 매물 정제. 거부된 행은 가격 계산에서 제외한다."""
-    valid = []
-    for raw in rows:
+def normalize(rows, diagnostics=None):
+    """기존 정제 규칙 적용. diagnostics에 행별 최초 제외 사유를 기록한다."""
+    valid, decisions = [], []
+    for index, raw in enumerate(rows, start=2):
         r = {c: str(raw.get(c, '')).strip() for c in COLUMNS}
+        reason = ''
         try:
             r['item'] = item(r['item'])
             r['manufacturer'] = maker(r['manufacturer'])
-            p = float(r['price'].replace(',', '').removesuffix('원'))
-            q = float(r['quantity'])
-            collected = date.fromisoformat(r['collected_at'][:10])
-            if not math.isfinite(p) or not 1000 <= p <= 50_000_000 or q != 1:
-                continue
-            if collected > today() or not r['source'] or not r['title']:
-                continue
+            try:
+                p = float(r['price'].replace(',', '').removesuffix('원'))
+            except ValueError:
+                raise ValueError('invalid_price') from None
+            if not math.isfinite(p) or not 1000 <= p <= 50_000_000:
+                raise ValueError('price_out_of_range')
+            try:
+                q = float(r['quantity'])
+            except ValueError:
+                raise ValueError('invalid_quantity') from None
+            if q != 1:
+                raise ValueError('bundle_quantity')
+            try:
+                collected = date.fromisoformat(r['collected_at'][:10])
+            except ValueError:
+                raise ValueError('invalid_collection_date') from None
+            if collected > today():
+                raise ValueError('future_collection_date')
+            if not r['source'] or not r['title'] or not r['item']:
+                raise ValueError('missing_identity')
             if r['is_sample'].lower() not in ('true', 'false'):
-                continue
-            if r['currency'] != 'KRW' or r['price_basis'] not in ('asking', 'sold_posted', 'auction'):
-                continue
+                raise ValueError('sample_flag_missing')
+            if r['currency'] != 'KRW':
+                raise ValueError('unsupported_currency')
             expected = {'asking': 'for_sale', 'sold_posted': 'sold', 'auction': 'sold'}
-            if r['sale_status'] != expected[r['price_basis']]:
-                continue
-            if BUNDLE.search(r['title']) or IRRELEVANT.search(r['title']):
-                continue
+            if r['price_basis'] not in expected or r['sale_status'] != expected[r['price_basis']]:
+                raise ValueError('sale_status_basis_mismatch')
+            if BUNDLE.search(r['title']):
+                raise ValueError('bundle_title')
+            # 원두는 그라인더/머신의 용도를 설명하기도 한다. 장비 키워드 검사는 아래에서 별도 수행.
+            irrelevant_title = r['title']
+            if r['item'] in ('커피 그라인더', '커피머신'):
+                irrelevant_title = irrelevant_title.replace('원두', '')
+            if IRRELEVANT.search(irrelevant_title):
+                raise ValueError('irrelevant_title')
             words = ITEM_WORDS.get(r['item'])
             if words and not any(token(w) in token(r['title']) for w in words):
-                continue
-            r['url'] = canonical_url(r['url'])
+                raise ValueError('item_keyword_mismatch')
+            try:
+                r['url'] = canonical_url(r['url'])
+            except ValueError:
+                raise ValueError('invalid_public_url') from None
             r.update(price=int(p), quantity=1, collected_at=collected.isoformat(),
-                     is_sample=r['is_sample'].lower())
+                     is_sample=r['is_sample'].lower(), _row=index)
             valid.append(r)
-        except (ValueError, TypeError, OverflowError):
-            continue
-    # 같은 URL의 최신 스냅샷만. 상태 변경도 과거 게시 가격을 중복 표본으로 만들지 않는다.
-    frame = pd.DataFrame(valid, columns=COLUMNS)
-    return frame.sort_values('collected_at').drop_duplicates('url', keep='last').reset_index(drop=True)
+        except (ValueError, TypeError, OverflowError) as exc:
+            reason = str(exc) if isinstance(exc, ValueError) else 'invalid_value'
+        decisions.append({'row': index, 'title': r['title'], 'source': r['source'],
+                          'status': 'excluded' if reason else 'accepted', 'reason': reason or 'valid'})
+    frame = pd.DataFrame(valid, columns=COLUMNS + ['_row'])
+    frame = frame.sort_values('collected_at').drop_duplicates('url', keep='last')
+    retained = set(frame['_row'])
+    for decision in decisions:
+        if decision['status'] == 'accepted' and decision['row'] not in retained:
+            decision.update(status='excluded', reason='duplicate_url')
+    if diagnostics is not None:
+        diagnostics.extend(decisions)
+    return frame.drop(columns='_row').reset_index(drop=True)
 
 
 def read(path=LISTINGS):

@@ -89,16 +89,27 @@ def keywords_for(name: str) -> list[str]:
     return [words[-1]] if words else []
 
 
+class OnbidAPIError(RuntimeError):
+    pass
+
+
 def _query(keyword: str, key: str) -> list[dict]:
     end = date.today() - timedelta(days=1)
     params = {
-        "serviceKey": key, "pageNo": 1, "numOfRows": 100, "resultType": "json",
-        "cltrTypeCd": "0003", "prptDivCd": ALL_PRPT, "pbctStatCd": "0010",
+        "serviceKey": urllib.parse.unquote(key.strip()), "pageNo": 1, "numOfRows": 100, "resultType": "json",
+        "cltrTypeCd": "0003", "dspsMthodCd": "0001", "prptDivCd": ALL_PRPT, "pbctStatCd": "0010",
         "opbdDtStart": (end - timedelta(days=LOOKBACK_DAYS)).strftime("%Y%m%d"),
         "opbdDtEnd": end.strftime("%Y%m%d"), "onbidCltrNm": keyword,
     }
     with urllib.request.urlopen(ONBID_URL + "?" + urllib.parse.urlencode(params), timeout=15) as r:
-        body = json.load(r).get("body", {})
+        payload = json.load(r)
+    payload = payload.get('response', payload)
+    code = str((payload.get('header') or {}).get('resultCode', '00'))
+    if code not in ('0', '00', '0000'):
+        raise OnbidAPIError('API_ERROR_' + code if code.isdigit() else 'API_RESPONSE_ERROR')
+    if 'body' not in payload:
+        raise OnbidAPIError('API_RESPONSE_ERROR')
+    body = payload['body']
     items = (body.get("items") or {})
     items = items.get("item", []) if isinstance(items, dict) else items
     return items if isinstance(items, list) else [items]
@@ -116,31 +127,57 @@ def _unit_price(raw) -> int | None:
     return amount // max(qty, 1)
 
 
-def evidence(name: str) -> list[dict]:
+def evidence(name: str, diagnostics=None) -> list[dict]:
     """품목의 개별 매각 낙찰 기록 (묶음·무관 물건 제외)."""
     key = _key()
     if not key:
+        if diagnostics is not None:
+            diagnostics.append({'item': name, 'status': 'MISSING_API_KEY'})
         return []
     rows, seen = [], set()
     cap = MAX_BY_NAME.get(name, MAX_WON)
     for kw in keywords_for(name):
         try:
             items = _query(kw, key)
-        except Exception:
+        except Exception as exc:
+            if diagnostics is not None:
+                status = str(exc) if isinstance(exc, OnbidAPIError) else ('HTTP_' + str(exc.code) if hasattr(exc, 'code') else type(exc).__name__)
+                diagnostics.append({'item': name, 'keyword': kw, 'status': status})
             continue
+        accepted_before = len(rows)
+        excluded_reasons = {}
+        def rejected(reason):
+            excluded_reasons[reason] = excluded_reasons.get(reason, 0) + 1
         for x in items:
             title = (x.get("onbidCltrNm") or "").strip()
             mng = x.get("cltrMngNo")
-            if not title or mng in seen or not _has_keyword(title, kw):
+            if not title or not mng:
+                rejected('missing_title_or_id')
                 continue
-            if BUNDLE.search(title) or EXCLUDE.search(title):
+            if mng in seen:
+                rejected('duplicate_id')
+                continue
+            if not _has_keyword(title, kw):
+                rejected('keyword_mismatch')
+                continue
+            if BUNDLE.search(title):
+                rejected('bundle_title')
+                continue
+            if EXCLUDE.search(title):
+                rejected('irrelevant_title')
                 continue
             price = _unit_price(x.get("scfbAmt"))
             if price is None or not MIN_WON <= price <= cap:
+                rejected('invalid_price_or_item_price_cap')
                 continue
             seen.add(mng)
             rows.append({"물건명": title, "낙찰가": price, "개찰일": str(x.get("cltrOpbdDt") or "")[:8],
                          "물건관리번호": mng})
+        if diagnostics is not None:
+            diagnostics.append({'item': name, 'keyword': kw, 'status': 'OK',
+                                'api_records': len(items), 'accepted': len(rows) - accepted_before,
+                                'excluded': len(items) - (len(rows) - accepted_before),
+                                'exclusion_reasons': excluded_reasons, 'first_page_limit_reached': len(items) >= 100})
     return rows
 
 
@@ -189,7 +226,7 @@ def empty_estimate(name, reason='가격 근거 부족', n=0):
 
 
 def estimate(name: str, manufacturer='', model='', spec='', condition='', *,
-             listings_path=None, allow_onbid=True):
+             listings_path=None, allow_onbid=True, diagnostics=None):
     """최소 3건, Q1/중앙값/Q3. 샘플·180일 초과·묶음·외화 제외.
 
     모델/사양이 확인되면 맞지 않는 제품으로 표본을 채우지 않는다.
@@ -198,13 +235,22 @@ def estimate(name: str, manufacturer='', model='', spec='', condition='', *,
     import listings
     brand = listings.maker(manufacturer)
     result = empty_estimate(name)
+    def trace(stage, frame):
+        if diagnostics is not None:
+            diagnostics.append({'stage': stage, 'remaining': len(frame)})
     try:
-        data = listings.production(listings.read(listings_path or listings.LISTINGS))
+        stored = listings.read(listings_path or listings.LISTINGS)
+        trace('normalized_db', stored)
+        data = listings.production(stored)
+        trace('recent_real_records', data)
         data = data[data['item'] == listings.item(name)]
+        trace('item', data)
         if brand:
             data = data[data.manufacturer == brand]
+            trace('manufacturer', data)
         if condition:
             data = data[data.condition.map(listings.token) == listings.token(condition)]
+            trace('condition', data)
         if model:
             exact = data[data.model.map(listings.token) == listings.token(model)]
             if not exact.empty:
@@ -218,15 +264,18 @@ def estimate(name: str, manufacturer='', model='', spec='', condition='', *,
                 match = '동일 모델 근거 부족'
         else:
             match = '동일 품목·제조사 참고 시세' if brand else '품목만 확인된 참고 시세'
+        trace('model_or_spec_fallback', data)
         if spec:
             data = data[data.spec.map(listings.token) == listings.token(spec)]
             match += '·동일 사양'
+            trace('spec', data)
         if not data.empty:
             # 서로 다른 가격 성격을 섞지 않음. 충분한 게시 가격 우선, 없으면 가장 많은 군집.
             cohorts = [(basis, data[data.price_basis == basis])
                        for basis in ('asking', 'sold_posted', 'auction')]
             sufficient = [(b, g) for b, g in cohorts if len(g) >= MIN_SAMPLES]
             basis, selected = sufficient[0] if sufficient else max(cohorts, key=lambda pair: len(pair[1]))
+            trace('price_basis_' + basis, selected)
             label = {'asking': '판매 중 매물의 게시 가격 기준 참고 시세',
                      'sold_posted': '판매 완료 매물의 게시 가격 (실제 거래액 미확인)',
                      'auction': '공매 낙찰가 기준 참고 시세'}[basis]
@@ -241,7 +290,9 @@ def estimate(name: str, manufacturer='', model='', spec='', condition='', *,
                 result.update(low=int(q1), mid=int(mid), high=int(q3))
                 return result
             result['source'] += ' · 가격 근거 부족 (3건 미만)'
-    except Exception:
+    except Exception as exc:
+        if diagnostics is not None:
+            diagnostics.append({'stage': 'db_error', 'error': type(exc).__name__})
         result['source'] = '가격 DB 조회 오류 · 가격 근거 부족'
     if allow_onbid:
         try:
