@@ -275,8 +275,15 @@ def detect_all(image, model: str | None = None) -> tuple[dict, dict]:
         "폐업을 앞둔 매장(카페·음식점) 사진이다. 중고로 팔 수 있는 물건을 사진에서 빠짐없이 찾아라.",
         "- 같은 물건이 여러 개면 하나하나 따로 박스를 그린다 (의자 6개면 6개).",
         "- 사람, 벽·바닥·천장·창문·문, 꽃·식물, 먹다 남은 음식, 글자·간판 문구는 제외.",
-        '- category: 장비·가구·가전은 "집기", 컵·식기·원두·시럽·과자·빵·케이크·병 음료 등은 "재고·소모품", 꽃병·액자·소형 장식은 "기타".',
-        "- 카운터·하부장·천장 매립형 에어컨·레일 조명처럼 붙어 있어 떼어 팔기 어려우면 fixed=true.",
+        '- category 는 넷 중 하나:',
+        '  1) "집기": 떼어서 중고로 팔 수 있는 장비·가구·가전. 예: 에스프레소 머신, 커피 그라인더, 제빙기, 블렌더, 업소용·테이블·쇼케이스 냉장고,',
+        '     오븐, 전자레인지, 포스기, 카드 단말기, 키오스크, 디지털 메뉴보드(벽걸이 TV·모니터), 이동 가능한 의자·스툴·테이블·소파, 스탠드형 조명.',
+        '  2) "고정 설비": 건물·벽·바닥·천장에 붙어 있어 떼어 팔기 어려운 것. 예: 카운터, 하부장, 붙박이 작업대, 천장형(매립) 에어컨,',
+        '     레일(트랙) 조명, 천장 매립 조명, 벽에 고정된 선반, 벽에 붙은 붙박이 소파·벤치, 싱크대. 고정 설비는 fixed=true.',
+        '     카운터·하부장처럼 사진 폭 대부분을 차지하는 큰 구조물은 박스를 1개만 그린다.',
+        '  3) "재고·소모품": 컵·머그·유리컵·테이크아웃 컵·빨대, 접시·그릇, 원두, 시럽·소스, 병 음료, 과자·빵·케이크.',
+        '  4) "기타": 꽃병·액자·인형 등 판매 가치가 낮은 장식.',
+        "- 집기인지 고정 설비인지 사진만으로 애매하면 고정 설비로 두고 uncertain=true.",
         "- 화면이 달린 기계는 커피머신·포스기·키오스크·TV·디지털 메뉴보드 중 무엇인지 구분.",
         "- 확실하지 않으면 uncertain=true. 보이지 않는 물건은 절대 추가하지 말 것. 가격·브랜드는 쓰지 말 것.",
         f"- 품목 이름은 가능하면 다음 사전에서: {p['dictionary']}",
@@ -309,7 +316,7 @@ def detect_all(image, model: str | None = None) -> tuple[dict, dict]:
         g["unc"] |= bool(it.get("uncertain"))
         g["fixed"] |= bool(it.get("fixed"))
     items = [{"name": n, "count": len(g["ids"]), "source_ids": g["ids"], "in_dictionary": n in p["dictionary"],
-              "uncertain": g["unc"] or g["fixed"], "category": g["cat"] if g["cat"] in ("집기", "재고·소모품", "기타") else "집기",
+              "uncertain": g["unc"] or g["fixed"], "category": g["cat"] if g["cat"] in ("집기", "고정 설비", "재고·소모품", "기타") else "집기",
               **({"note": "고정 설비 의심"} if g["fixed"] else {})} for n, g in groups.items()]
     det = {"objects": objs, "rejected": [], "seconds": round(time.time() - t0, 1), "truncated": False}
     return det, {"items": items, "excluded": [], "verified": []}

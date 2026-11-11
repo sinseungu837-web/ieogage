@@ -514,7 +514,16 @@ def cached_estimate(name: str, manufacturer='', model='', spec='', condition='',
 
 def final_page(last):
     st.header('최종 분석 · 매각 견적')
-    rows = inventory_rows(last)
+    all_rows = inventory_rows(last)
+    # Gemini 가 붙인 분류. 사용자가 새로 그린 박스나 바꾼 이름은 '집기'
+    category = {it['name']: it.get('category', '집기') for it in last.get('result', {}).get('items', [])}
+    for r in all_rows:
+        r['분류'] = category.get(r['집기명'], '집기')
+    # 고정 설비(카운터·하부장·천장형 에어컨 등)는 떼어 팔기 어려워 최종 견적에서 제외
+    fixed = [r for r in all_rows if r['분류'] == '고정 설비']
+    # 재고·소모품·장식은 가격 조회 없이 '묶음 1건'으로 따로 표시 (총액 제외)
+    supplies = [r for r in all_rows if r['분류'] in ('재고·소모품', '기타')]
+    rows = [r for r in all_rows if r not in fixed and r not in supplies]
     estimates = []
     with st.spinner('저장된 가격 DB와 보조 공매 기록을 확인하는 중...'):
         for row in rows:
@@ -540,6 +549,15 @@ def final_page(last):
     columns = ['집기명', '제조사', '개수', '모델명', '사양', '상태']
     table = pd.DataFrame([{k: row.get(k, '') for k in columns} for row in rows], columns=columns)
     st.dataframe(table, hide_index=True, use_container_width=True)
+    if fixed:
+        st.caption('고정 설비로 분류되어 견적에서 제외: '
+                   + ', '.join(f"{r['집기명']} {r['개수']}" for r in fixed)
+                   + ' (떼어 팔 수 있다면 3단계에서 이름을 바꿔 주세요)')
+    if supplies:
+        st.subheader('재고·소모품 묶음')
+        st.caption('컵·원두·병 음료·소품 등은 개별 시세 대신 묶음 1건으로 정리합니다. 총 매각액에는 포함하지 않습니다.')
+        st.dataframe(pd.DataFrame([{'품목': r['집기명'], '개수': r['개수'], '분류': r['분류']} for r in supplies]),
+                     hide_index=True, use_container_width=True)
     st.subheader('물품별 가격 · 시세')
     prices = table.copy()
     e = estimates
@@ -569,7 +587,12 @@ def final_page(last):
               for r, x in zip(rows, e) for record in x['evidence']]
         st.dataframe(pd.DataFrame(ev), hide_index=True, use_container_width=True,
                      column_config={'url': st.column_config.LinkColumn('원본 매물/검색', display_text='보기')})
-    st.download_button('최종 목록 CSV 내려받기', prices.to_csv(index=False).encode('utf-8-sig'),
+    export = prices
+    if supplies:
+        bundle = {'집기명': '재고·소모품 묶음 (' + ', '.join(f"{r['집기명']} {r['개수']}" for r in supplies) + ')',
+                  '개수': 1, '근거': '총액 제외'}
+        export = pd.concat([prices, pd.DataFrame([bundle])], ignore_index=True)
+    st.download_button('최종 목록 CSV 내려받기', export.to_csv(index=False).encode('utf-8-sig'),
                        file_name='이어가게_최종목록.csv', mime='text/csv')
     left, right = st.columns(2)
     if left.button('← 분석 내용 다시 수정', use_container_width=True):
