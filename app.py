@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from PIL import Image, ImageDraw, ImageFont
 
 import llm
+import price
 import vision
 
 from box_selector import select_box, validated_box
@@ -483,12 +484,28 @@ def edit_inventory_table(last):
                                   '개수': st.column_config.NumberColumn(format='%d개')})
 
 
+@st.cache_data(ttl=86400, show_spinner=False)
+def cached_estimate(name: str) -> dict:
+    return price.estimate(name)
+
+
 def final_page(last):
     st.header('최종 분석 · 매각 견적')
-    st.subheader('총 매각 예상 범위')
-    st.markdown('### — 원 ~ — 원')
-    st.caption('시세 데이터가 준비되면 표시됩니다. 현재 금액 칸은 비워두었습니다.')
     rows = inventory_rows(last)
+    with st.spinner('공매 낙찰 기록에서 품목별 가격을 찾는 중...'):
+        est = {row['집기명']: cached_estimate(row['집기명']) for row in rows}
+    priced = [r for r in rows if est[r['집기명']]['mid'] is not None]
+    low = sum(est[r['집기명']]['low'] * r['개수'] for r in priced)
+    mid = sum(est[r['집기명']]['mid'] * r['개수'] for r in priced)
+    high = sum(est[r['집기명']]['high'] * r['개수'] for r in priced)
+    st.subheader('총 매각 예상 범위')
+    if priced:
+        st.markdown(f'### {low:,}원 ~ {high:,}원')
+        st.caption(f'중간값 기준 {mid:,}원 · 가격 근거가 있는 {len(priced)}종 합계 '
+                   f'(근거 부족 {len(rows) - len(priced)}종 제외) · 공매 낙찰가 기준이라 일반 중고 시세보다 낮을 수 있습니다.')
+    else:
+        st.markdown('### — 원 ~ — 원')
+        st.caption('가격 근거가 있는 품목이 없습니다. 아래 검색 링크로 직접 확인해 주세요.')
     st.image(draw_boxes(last['image'], last['det']['objects'], last['box_names']),
              caption='수정 내용이 반영된 최종 분석 사진', use_container_width=True)
     st.subheader('최종 집기 목록')
@@ -497,9 +514,24 @@ def final_page(last):
     st.dataframe(table, hide_index=True, use_container_width=True)
     st.subheader('물품별 가격 · 시세')
     prices = table.copy()
-    for column in ['개당 시세 하한 (원)', '개당 시세 상한 (원)', '예상 매각액 하한 (원)', '예상 매각액 상한 (원)']:
-        prices[column] = ''
-    st.dataframe(prices, hide_index=True, use_container_width=True)
+    e = [est[n] for n in prices['집기명']]
+    prices['개당 시세 하한 (원)'] = [x['low'] for x in e]
+    prices['개당 시세 상한 (원)'] = [x['high'] for x in e]
+    prices['예상 매각액 하한 (원)'] = [x['low'] * c if x['low'] is not None else None for x, c in zip(e, prices['개수'])]
+    prices['예상 매각액 상한 (원)'] = [x['high'] * c if x['high'] is not None else None for x, c in zip(e, prices['개수'])]
+    prices['근거'] = [x['source'] for x in e]
+    prices['직접 검색'] = [x['search_url'] for x in e]
+    money = st.column_config.NumberColumn(format='%d')
+    st.dataframe(prices, hide_index=True, use_container_width=True, column_config={
+        '개당 시세 하한 (원)': money, '개당 시세 상한 (원)': money,
+        '예상 매각액 하한 (원)': money, '예상 매각액 상한 (원)': money,
+        '직접 검색': st.column_config.LinkColumn(display_text='검색'),
+    })
+    st.caption('가격 범위 = 온비드 공매에서 개별로 팔린 같은 품목 낙찰가의 하위 25%~상위 25% (최근 2년, 묶음 매각 제외). '
+               '근거가 3건 미만이면 비워 두고 검색 링크만 제공합니다.')
+    with st.expander('가격 근거 보기 (온비드 공매 낙찰 기록)'):
+        ev = [{'집기명': n, **r} for n, x in est.items() for r in x['evidence']]
+        st.dataframe(pd.DataFrame(ev), hide_index=True, use_container_width=True)
     st.download_button('최종 목록 CSV 내려받기', prices.to_csv(index=False).encode('utf-8-sig'),
                        file_name='이어가게_최종목록.csv', mime='text/csv')
     left, right = st.columns(2)
