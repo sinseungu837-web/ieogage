@@ -179,7 +179,7 @@ def rebuild_items_from_boxes(objects: list[dict], names: dict[int, str], orig_it
     return new_items
 
 
-def analyze_photo(image, key, use_grounding):
+def analyze_photo(image, key):
     if not take_daily_quota():
         st.error("오늘 서비스 전체 분석 한도에 도달했습니다. 내일 다시 이용해 주세요.")
         st.stop()
@@ -189,8 +189,8 @@ def analyze_photo(image, key, use_grounding):
     model, processor = get_vision()
     T["모델 준비"] = _t.time() - T.pop("load")
     _s = _t.time()
-    with st.spinner(f"① 사진에서 물체를 찾는 중 ({'RF-DETR' if vision.DETECTOR == 'rfdetr' else 'Florence-2'})..."):
-        det = vision.detect(model, processor, image, use_grounding)
+    with st.spinner("① 사진에서 물체를 찾는 중 (RF-DETR)..."):
+        det = vision.detect(model, processor, image)
     kept, dropped = vision.code_filter(det["objects"], image.size)
     T["1단계 탐지"] = _t.time() - _s; _s = _t.time()
     with st.spinner("② 판매할 수 있는 집기만 고르는 중 (Gemini)..."):
@@ -271,6 +271,23 @@ def edit_page(last):
                 last["selected_box_id"] = selected
                 st.session_state[f"edit_box_{last['key']}"] = selected
                 st.rerun()
+
+    # [실험용] 단계별 시간 + 모델별 최종 탐지 문구 (나중에 지울 것)
+    from collections import Counter as _C
+    _t = last["det"].get("timing", {})
+    _rf = [o for o in last["kept"] if o.get("task") != "GEMINI"]
+    _gm = [o for o in objects if o.get("task") == "GEMINI"]
+    _ver = last["result"].get("verified", [])
+    _fmt = lambda c: ", ".join(f"{k} {v}" for k, v in c.most_common()) or "없음"
+    st.markdown(
+        "**[실험] 단계별 시간**: " + (" · ".join(f"{k} {v}초" for k, v in _t.items()) or "기록 없음")
+        + f"  \n**[실험] RF-DETR 최종 (코드 필터 후 {len(_rf)}개)**: " + _fmt(_C(o["label"] for o in _rf))
+        + "  \n**[실험] 탐지 박스의 최종 이름 (Gemini 1 + 3)**: "
+        + _fmt(_C(box_names.get(o["id"], "제외") for o in _rf))
+        + f"  \n**[실험] Gemini 2 추가 탐지 ({len(_gm)}개)**: " + _fmt(_C(o["label"] for o in _gm))
+        + f"  \n**[실험] Gemini 3 재확인 ({len(_ver)}개)**: "
+        + (", ".join(f"{v['before']}→{v['after']}" for v in _ver) or "없음")
+    )
 
     rows = inventory_rows(last)
     st.caption(f"현재 집기 {len(rows)}종 · 총 {len(box_names)}개 박스")
@@ -414,7 +431,6 @@ def photo_page():
     source = st.radio('사진 입력', methods, index=methods.index(st.session_state.get('input_method', methods[0])), horizontal=True)
     st.session_state.input_method = source
     file = st.file_uploader('매장 사진', type=['jpg', 'jpeg', 'png']) if source == methods[0] else st.camera_input('매장을 넓게 찍어 주세요')
-    use_grounding = st.toggle('전문 장비 한 번 더 찾기', value=False) if vision.DETECTOR == 'florence' else False
     if file is not None:
         if file.size > MAX_UPLOAD_MB * 1024 * 1024:
             st.error(f'{MAX_UPLOAD_MB}MB 이하 사진만 올릴 수 있습니다.')
@@ -432,7 +448,7 @@ def photo_page():
         image = draft['image']
         st.image(image, caption='분석할 사진', use_container_width=True)
         import hashlib
-        key = hashlib.md5(image.tobytes()).hexdigest() + str(use_grounding)
+        key = hashlib.md5(image.tobytes()).hexdigest()
         already = st.session_state.get('last', {}).get('key') == key
         if already:
             st.caption('이 사진의 분석 결과가 있습니다. 기존 수정 내용을 이어서 확인할 수 있어요.')
@@ -443,7 +459,7 @@ def photo_page():
             if not llm.get_api_key():
                 st.error('서버에 AI 키가 설정되지 않았습니다. 관리자에게 문의하세요.')
             else:
-                analyze_photo(image, key, use_grounding)
+                analyze_photo(image, key)
         if limit:
             st.warning('이 화면에서 가능한 분석 횟수를 모두 사용했습니다.')
     if st.button('← 시작 화면'):

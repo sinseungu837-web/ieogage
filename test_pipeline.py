@@ -12,7 +12,7 @@ import vision
 
 load_dotenv(Path(__file__).parent / ".env")
 
-# 1) LLM 단독: 가상의 Florence 라벨 목록
+# 1) LLM 단독: 가상의 탐지 라벨 목록
 fake = [{"id": i, "label": l} for i, l in enumerate(
     ["man", "espresso machine", "chair", "chair", "chair", "wall", "coffee cup", "display case",
      "refrigerator", "potted plant", "window", "cash register", "cake", "table", "table"])]
@@ -24,12 +24,9 @@ print(" code dropped:", [d["label"] for d in dropped])
 print(" items:", [(i["name"], i["count"], i["uncertain"]) for i in res["items"]])
 print(" llm excluded:", res["excluded"])
 
-# 2) Florence 실제 실행
+# 2) RF-DETR 실제 실행
 if len(sys.argv) > 1:
     model, proc = vision.load_model()
     img = vision.prepare(Image.open(sys.argv[1]))
-    for g in (False, True):
-        det = vision.detect(model, proc, img, use_grounding=g)
-        rej = [(r["label"], r["check"]) for r in det["rejected"]]
-        print(f"[Florence grounding={g}] {det['seconds']}s kept:", [o["label"] for o in det["objects"]][:20],
-              "rejected:", rej)
+    det = vision.detect(model, proc, img)
+    print(f"[RF-DETR] {det['seconds']}s:", [(o["label"], o["score"]) for o in det["objects"]][:30])

@@ -206,7 +206,7 @@ def verify_ambiguous(image, objects: list[dict], result: dict, model: str | None
 
 
 def find_missing(image, result: dict, objects: list[dict], model: str | None = None) -> tuple[list[dict], list[dict]]:
-    """Florence 가 놓친 판매 가능 장비를 Gemini 가 사진 전체를 1회 보고 보완 (박스 포함).
+    """RF-DETR 이 놓친 판매 가능 장비를 Gemini 가 사진 전체를 1회 보고 보완 (박스 포함).
     반환: (새 물체 목록, 새 품목 목록). 이미 찾은 품목 이름은 제외해 중복을 막는다."""
     found = sorted({it["name"] for it in result["items"]})
     p = load_prompt()
