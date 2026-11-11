@@ -1,8 +1,7 @@
-"""품목별 참고 중고가: 온비드 공매 낙찰가(개별 매각만) → 없으면 '추정 불가' + 검색 링크.
+"""사전 수집 CSV 우선 가격 조회와 온비드 공매 낙찰가 보조 조회.
 
-숫자는 모두 코드가 계산한다 (LLM 미사용).
-- 근거: 한국자산관리공사 차세대 온비드 물건 입찰결과목록 조회서비스 (공공데이터포털 15157252)
-- 키: DATA_GO_KR_KEY (.env 또는 Streamlit Secrets)
+숫자는 코드에서만 계산하며, 서로 다른 가격 성격은 합쳐 평균내지 않는다.
+온비드 키는 DATA_GO_KR_KEY (.env 또는 Streamlit Secrets).
 """
 from __future__ import annotations
 
@@ -153,14 +152,104 @@ def _drop_outliers(vals: list[int]) -> list[int]:
     return [v for v in vals if lo <= v <= hi]
 
 
-def estimate(name: str) -> dict:
+def onbid_estimate(name: str, manufacturer="", model="", spec="", condition="") -> dict:
     """{'low','mid','high','n','source','evidence','search_url'}. 근거 부족이면 low/mid/high=None."""
     rows = evidence(name)
+    from listings import maker, token
+    # 온비드에는 별도 제조사/모델 열이 없어 제목으로 확인 가능한 기록만 쓴다.
+    for value in (manufacturer if maker(manufacturer) else '', model, spec, condition):
+        if value:
+            rows = [r for r in rows if token(value) in token(r['물건명'])]
     vals = _drop_outliers(sorted(r["낙찰가"] for r in rows))
     search_url = "https://search.daum.net/search?q=" + urllib.parse.quote(f"{name} 중고")
     if len(vals) < MIN_SAMPLES:
         return {"low": None, "mid": None, "high": None, "n": len(vals),
                 "source": "근거 부족 (온비드 개별 낙찰 3건 미만)", "evidence": rows, "search_url": search_url}
-    q1, med, q3 = statistics.quantiles(vals, n=4)
+    import pandas as pd
+    q1, med, q3 = pd.Series(vals).quantile([.25, .5, .75])
     return {"low": int(q1), "mid": int(statistics.median(vals)), "high": int(q3), "n": len(vals),
             "source": f"온비드 공매 개별 낙찰 {len(vals)}건 (최근 2년)", "evidence": rows, "search_url": search_url}
+
+
+# 새 경로: 사전 수집 CSV 우선. 게시 가격과 공매 낙찰가는 결합하지 않는다.
+def db_revision():
+    from listings import LISTINGS
+    try:
+        stat = LISTINGS.stat()
+        return (stat.st_mtime_ns, stat.st_size)
+    except OSError:
+        return None
+
+
+def empty_estimate(name, reason='가격 근거 부족', n=0):
+    return {'low': None, 'mid': None, 'high': None, 'n': n, 'source': reason,
+            'evidence': [], 'search_url': 'https://search.daum.net/search?q=' +
+            urllib.parse.quote(f'{name} 중고'), 'collected_at': '',
+            'match': '', 'confidence': '낮음', 'price_basis': ''}
+
+
+def estimate(name: str, manufacturer='', model='', spec='', condition='', *,
+             listings_path=None, allow_onbid=True):
+    """최소 3건, Q1/중앙값/Q3. 샘플·180일 초과·묶음·외화 제외.
+
+    모델/사양이 확인되면 맞지 않는 제품으로 표본을 채우지 않는다.
+    동일 제조사·사양 fallback도 입력 사양이 명시된 경우에만 허용한다.
+    """
+    import listings
+    brand = listings.maker(manufacturer)
+    result = empty_estimate(name)
+    try:
+        data = listings.production(listings.read(listings_path or listings.LISTINGS))
+        data = data[data.item == listings.item(name)]
+        if brand:
+            data = data[data.manufacturer == brand]
+        if condition:
+            data = data[data.condition.map(listings.token) == listings.token(condition)]
+        if model:
+            exact = data[data.model.map(listings.token) == listings.token(model)]
+            if not exact.empty:
+                data = exact
+                match = '동일 품목·제조사·모델' if brand else '동일 품목·모델 (제조사 미확인)'
+            elif spec:
+                data = data[data.spec.map(listings.token) == listings.token(spec)]
+                match = '동일 품목·동일 사양' + ('·제조사' if brand else '')
+            else:
+                data = exact
+                match = '동일 모델 근거 부족'
+        else:
+            match = '동일 품목·제조사 참고 시세' if brand else '품목만 확인된 참고 시세'
+        if spec:
+            data = data[data.spec.map(listings.token) == listings.token(spec)]
+            match += '·동일 사양'
+        if not data.empty:
+            # 서로 다른 가격 성격을 섞지 않음. 충분한 게시 가격 우선, 없으면 가장 많은 군집.
+            cohorts = [(basis, data[data.price_basis == basis])
+                       for basis in ('asking', 'sold_posted', 'auction')]
+            sufficient = [(b, g) for b, g in cohorts if len(g) >= MIN_SAMPLES]
+            basis, selected = sufficient[0] if sufficient else max(cohorts, key=lambda pair: len(pair[1]))
+            label = {'asking': '판매 중 매물의 게시 가격 기준 참고 시세',
+                     'sold_posted': '판매 완료 매물의 게시 가격 (실제 거래액 미확인)',
+                     'auction': '공매 낙찰가 기준 참고 시세'}[basis]
+            result.update(n=len(selected), match=match, price_basis=basis,
+                          source=label + ' · ' + ', '.join(sorted(selected.source.unique())),
+                          collected_at=selected.collected_at.max(),
+                          evidence=selected.to_dict('records'),
+                          confidence='높음' if brand and model and '동일 모델 근거 부족' not in match
+                          and selected.model.map(listings.token).eq(listings.token(model)).all() else '낮음')
+            if len(selected) >= MIN_SAMPLES:
+                q1, mid, q3 = selected.price.astype(float).quantile([.25, .5, .75])
+                result.update(low=int(q1), mid=int(mid), high=int(q3))
+                return result
+            result['source'] += ' · 가격 근거 부족 (3건 미만)'
+    except Exception:
+        result['source'] = '가격 DB 조회 오류 · 가격 근거 부족'
+    if allow_onbid:
+        try:
+            fallback = onbid_estimate(name, manufacturer, model, spec, condition)
+            if fallback['mid'] is not None or (not result['n'] and fallback['n']):
+                return {**result, **fallback, 'price_basis': 'auction',
+                        'match': '온비드 제목 기반 참고 시세', 'confidence': '낮음',
+                        'collected_at': listings.today().isoformat()}
+        except Exception:
+            pass
+    return result

@@ -426,6 +426,8 @@ def apply_inventory_edit(last, rows, widget_key):
                 if name != row['집기명']:
                     st.session_state[f'edit_input_{oid}'] = name
             last.setdefault('manufacturers', {})[oid] = maker if maker != '미확인' else ''
+            for column, key in (('모델명', 'models'), ('사양', 'specs'), ('상태', 'conditions')):
+                last.setdefault(key, {})[oid] = str(fields.get(column, row.get(column, '')) or '').strip()
     last['table_revision'] = last.get('table_revision', 0) + 1
 
 
@@ -488,12 +490,12 @@ def photo_page():
 
 def edit_inventory_table(last):
     st.subheader('집기 목록 수정')
-    st.caption('집기명과 제조사는 표에서 수정하세요. 제조사가 불명확하면 미확인으로 두세요. 개수는 박스 추가·삭제에 맞춰 자동으로 계산됩니다.')
+    st.caption('집기명·제조사·모델명·사양·상태를 수정할 수 있습니다. 사양은 용량·그룹 수 등으로 입력하고, 모르는 정보는 비워 두세요. 개수는 박스 추가·삭제에 맞춰 자동으로 계산됩니다.')
     rows = inventory_rows(last)
     if not rows:
         st.info('목록이 비어 있습니다. 사진에서 영역을 지정해 물건을 추가할 수 있습니다.')
         return
-    table = pd.DataFrame([{k: row[k] for k in ('집기명', '제조사', '개수')} for row in rows])
+    table = pd.DataFrame([{k: row.get(k, '') for k in ('집기명', '제조사', '개수', '모델명', '사양', '상태')} for row in rows])
     widget_key = f"inventory_{last['key']}_{last.get('table_revision', 0)}"
     st.data_editor(table, hide_index=True, use_container_width=True, num_rows='fixed',
                    disabled=['개수'], key=widget_key, on_change=apply_inventory_edit,
@@ -503,54 +505,74 @@ def edit_inventory_table(last):
                                   '개수': st.column_config.NumberColumn(format='%d개')})
 
 
-@st.cache_data(ttl=86400, show_spinner=False)
-def cached_estimate(name: str) -> dict:
-    return price.estimate(name)
+@st.cache_data(ttl=3600, show_spinner=False)
+def cached_estimate(name: str, manufacturer='', model='', spec='', condition='', revision=None) -> dict:
+    # DB 교체 즉시 캐시 키가 바뀐다. 수집은 이 함수나 업로드 과정에서 실행하지 않는다.
+    return price.estimate(name, manufacturer, model, spec, condition)
 
 
 def final_page(last):
     st.header('최종 분석 · 매각 견적')
     rows = inventory_rows(last)
-    with st.spinner('공매 낙찰 기록에서 품목별 가격을 찾는 중...'):
-        est = {row['집기명']: cached_estimate(row['집기명']) for row in rows}
-    priced = [r for r in rows if est[r['집기명']]['mid'] is not None]
-    low = sum(est[r['집기명']]['low'] * r['개수'] for r in priced)
-    mid = sum(est[r['집기명']]['mid'] * r['개수'] for r in priced)
-    high = sum(est[r['집기명']]['high'] * r['개수'] for r in priced)
+    estimates = []
+    with st.spinner('저장된 가격 DB와 보조 공매 기록을 확인하는 중...'):
+        for row in rows:
+            try:
+                result = cached_estimate(row['집기명'], row['제조사'], row.get('모델명', ''),
+                                         row.get('사양', ''), row.get('상태', ''), price.db_revision())
+            except Exception:
+                result = price.empty_estimate(row['집기명'], '가격 조회 오류 · 가격 근거 부족')
+            estimates.append(result)
+    priced = [(r, e) for r, e in zip(rows, estimates) if e['mid'] is not None]
+    low = sum(e['low'] * r['개수'] for r, e in priced)
+    mid = sum(e['mid'] * r['개수'] for r, e in priced)
+    high = sum(e['high'] * r['개수'] for r, e in priced)
     st.subheader('총 매각 예상 범위')
     if priced:
         st.markdown(f'### {low:,}원 ~ {high:,}원')
-        st.caption(f'중간값 기준 {mid:,}원 · 가격 근거가 있는 {len(priced)}종 합계 '
-                   f'(근거 부족 {len(rows) - len(priced)}종 제외) · 공매 낙찰가 기준이라 일반 중고 시세보다 낮을 수 있습니다.')
+        st.caption(f'중앙값 기준 {mid:,}원 · 가격 근거가 있는 {len(priced)}개 품목 그룹 합계')
+        if len(priced) < len(rows):
+            st.warning(f'부분 견적입니다. 가격 근거 부족 {len(rows) - len(priced)}개 품목 그룹은 합계에서 제외했습니다.')
+        if len({e['price_basis'] for _, e in priced}) > 1:
+            st.info('품목별 게시 가격과 공매 낙찰가 등 서로 다른 근거의 금액을 합산한 참고 합계입니다. 실제 매각액과 다를 수 있습니다.')
     else:
         st.markdown('### — 원 ~ — 원')
         st.caption('가격 근거가 있는 품목이 없습니다. 아래 검색 링크로 직접 확인해 주세요.')
     st.image(draw_boxes(last['image'], last['det']['objects'], last['box_names']),
              caption='수정 내용이 반영된 최종 분석 사진', use_container_width=True)
     st.subheader('최종 집기 목록')
-    table = pd.DataFrame([{k: row[k] for k in ('집기명', '제조사', '개수')} for row in rows],
-                         columns=['집기명', '제조사', '개수'])
+    columns = ['집기명', '제조사', '개수', '모델명', '사양', '상태']
+    table = pd.DataFrame([{k: row.get(k, '') for k in columns} for row in rows], columns=columns)
     st.dataframe(table, hide_index=True, use_container_width=True)
     st.subheader('물품별 가격 · 시세')
     prices = table.copy()
-    e = [est[n] for n in prices['집기명']]
+    e = estimates
     prices['개당 시세 하한 (원)'] = [x['low'] for x in e]
+    prices['개당 대표 가격 (원)'] = [x['mid'] for x in e]
     prices['개당 시세 상한 (원)'] = [x['high'] for x in e]
     prices['예상 매각액 하한 (원)'] = [x['low'] * c if x['low'] is not None else None for x, c in zip(e, prices['개수'])]
     prices['예상 매각액 상한 (원)'] = [x['high'] * c if x['high'] is not None else None for x, c in zip(e, prices['개수'])]
+    prices['표본 수'] = [x['n'] for x in e]
     prices['근거'] = [x['source'] for x in e]
+    prices['매칭'] = [x['match'] for x in e]
+    prices['신뢰도'] = [x['confidence'] for x in e]
+    prices['최근 수집일'] = [x['collected_at'] for x in e]
     prices['직접 검색'] = [x['search_url'] for x in e]
     money = st.column_config.NumberColumn(format='%d')
     st.dataframe(prices, hide_index=True, use_container_width=True, column_config={
-        '개당 시세 하한 (원)': money, '개당 시세 상한 (원)': money,
+        '개당 시세 하한 (원)': money, '개당 대표 가격 (원)': money, '개당 시세 상한 (원)': money,
         '예상 매각액 하한 (원)': money, '예상 매각액 상한 (원)': money,
         '직접 검색': st.column_config.LinkColumn(display_text='검색'),
     })
-    st.caption('가격 범위 = 온비드 공매에서 개별로 팔린 같은 품목 낙찰가의 하위 25%~상위 25% (최근 2년, 묶음 매각 제외). '
-               '근거가 3건 미만이면 비워 두고 검색 링크만 제공합니다.')
-    with st.expander('가격 근거 보기 (온비드 공매 낙찰 기록)'):
-        ev = [{'집기명': n, **r} for n, x in est.items() for r in x['evidence']]
-        st.dataframe(pd.DataFrame(ev), hide_index=True, use_container_width=True)
+    st.caption('개당 Q1(25%)·중앙값·Q3(75%) × 수량으로 계산합니다. 유효 표본 3건 미만은 가격 근거 부족으로 표시합니다. '
+               'DB는 최근 180일의 실제 개별 매물만 사용하며 샘플·묶음은 제외합니다. '
+               '제조사·모델·사양이 없으면 신뢰도가 낮은 참고 시세입니다. 판매 완료 게시 가격도 실제 거래액을 보장하지 않습니다. '
+               '보조 온비드 기록은 최근 2년의 공매 낙찰가로 일반 중고 시세보다 낮을 수 있습니다.')
+    with st.expander('가격 근거 보기 (출처·원본 매물·수집일)'):
+        ev = [{'집기명': r['집기명'], '입력 제조사': r['제조사'], **record}
+              for r, x in zip(rows, e) for record in x['evidence']]
+        st.dataframe(pd.DataFrame(ev), hide_index=True, use_container_width=True,
+                     column_config={'url': st.column_config.LinkColumn('원본 매물/검색', display_text='보기')})
     st.download_button('최종 목록 CSV 내려받기', prices.to_csv(index=False).encode('utf-8-sig'),
                        file_name='이어가게_최종목록.csv', mime='text/csv')
     left, right = st.columns(2)

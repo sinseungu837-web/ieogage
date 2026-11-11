@@ -21,3 +21,17 @@ cd hackathon-ieogage/app
 - `data/price_table.csv`, `data/channels.csv` 시세·판매처 (작성 예정)
 - `docs/개발과정_모델설정.md` 발표용 개발 기록
 - `.env` API 키 (업로드 금지, `.gitignore` 처리)
+
+## 중고가격 DB
+
+사전 수집 CSV를 조회하고, 근거가 부족하면 기존 온비드 API를 별도로 사용합니다.
+모델명·사양·상태를 수정하면 가격 매칭에도 반영됩니다. 표본 3건 미만은 견적을 생성하지 않습니다.
+
+```bash
+python crawler.py onbid       # 로컬 .env의 DATA_GO_KR_KEY 필요
+python -m unittest discover -s tests -p 'test_*.py'
+```
+
+현재 실제 수집 매물은 **0건**이며 운영 DB에 샘플 가격을 넣지 않았습니다.
+허용 출처 등록, CSV 스키마, 갱신/배포 방법, 테스트 및 제약은
+[가격 DB 구현 결과](docs/가격DB_구현결과.md)를 참고하세요.

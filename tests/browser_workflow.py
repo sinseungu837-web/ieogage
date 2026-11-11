@@ -3,6 +3,8 @@ from PIL import Image
 from io import BytesIO
 import os
 import re
+import csv
+import io
 # Run: streamlit run tests/preview_workflow.py --server.port 8502
 # Then: python tests/browser_workflow.py (Playwright + Chromium required)
 with sync_playwright() as p:
@@ -28,7 +30,7 @@ with sync_playwright() as p:
    editor=page.locator('[data-testid="stDataFrame"]')
    editor.scroll_into_view_if_needed()
    canvas=editor.locator('.dvn-scroller').first
-   canvas.dblclick(position={'x':350,'y':52})
+   canvas.dblclick(position={'x':200,'y':52})
    field=page.locator('textarea.gdg-input');field.fill('Acme');field.press('Enter')
    page.wait_for_timeout(800)
    canvas.dblclick(position={'x':80,'y':52})
@@ -42,8 +44,10 @@ with sync_playwright() as p:
   with page.expect_download() as download:
    page.get_by_role('button',name='최종 목록 CSV 내려받기',exact=True).click()
   text=download.value.path().read_text(encoding='utf-8-sig')
-  expected='의자,미확인,1,,,,' if mobile else 'Office chair,Acme,1,,,,'
-  assert '집기명,제조사,개수' in text and expected in text,text
+  row = list(csv.DictReader(io.StringIO(text)))[0]
+  expected = ('의자', '미확인') if mobile else ('Office chair', 'Acme')
+  assert (row['집기명'], row['제조사']) == expected, text
+  assert row['개수'] == '1' and row['개당 대표 가격 (원)'] == '', text
   page.get_by_role('button',name='← 분석 내용 다시 수정',exact=True).click()
   page.get_by_text('집기 목록 수정',exact=True).wait_for()
   page.get_by_role('button',name='← 사진 입력으로',exact=True).click()
@@ -52,7 +56,8 @@ with sync_playwright() as p:
   page.get_by_role('button',name='수정 완료 · 최종 견적 보기 →',exact=True).click()
   with page.expect_download() as download:
    page.get_by_role('button',name='최종 목록 CSV 내려받기',exact=True).click()
-  assert expected in download.value.path().read_text(encoding='utf-8-sig')
+  row = list(csv.DictReader(io.StringIO(download.value.path().read_text(encoding='utf-8-sig'))))[0]
+  assert (row['집기명'], row['제조사']) == expected, row
   assert page.locator('[data-testid="stException"]').count()==0
   print('final blank prices/download/back/photo retained/reuse PASS',mobile)
   c.close()
