@@ -6,12 +6,17 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import statistics
 import urllib.parse
 import urllib.request
 from datetime import date, timedelta
+
+from onbid_api import OnbidError, request_body
+
+logger = logging.getLogger(__name__)
 
 ONBID_URL = "https://apis.data.go.kr/B010003/OnbidCltrBidRsltListSrvc2/getCltrBidRsltList2"
 ALL_PRPT = "0007,0010,0005,0004,0002,0003,0006,0008,0011,0013"  # 재산유형 전체
@@ -89,8 +94,7 @@ def keywords_for(name: str) -> list[str]:
     return [words[-1]] if words else []
 
 
-class OnbidAPIError(RuntimeError):
-    pass
+OnbidAPIError = OnbidError  # 기존 호출자의 예외 타입 이름 유지
 
 
 def _query(keyword: str, key: str) -> list[dict]:
@@ -101,18 +105,13 @@ def _query(keyword: str, key: str) -> list[dict]:
         "opbdDtStart": (end - timedelta(days=LOOKBACK_DAYS)).strftime("%Y%m%d"),
         "opbdDtEnd": end.strftime("%Y%m%d"), "onbidCltrNm": keyword,
     }
-    with urllib.request.urlopen(ONBID_URL + "?" + urllib.parse.urlencode(params), timeout=15) as r:
-        payload = json.load(r)
-    payload = payload.get('response', payload)
-    code = str((payload.get('header') or {}).get('resultCode', '00'))
-    if code not in ('0', '00', '0000'):
-        raise OnbidAPIError('API_ERROR_' + code if code.isdigit() else 'API_RESPONSE_ERROR')
-    if 'body' not in payload:
-        raise OnbidAPIError('API_RESPONSE_ERROR')
-    body = payload['body']
+    body = request_body(ONBID_URL + "?" + urllib.parse.urlencode(params))
     items = (body.get("items") or {})
     items = items.get("item", []) if isinstance(items, dict) else items
-    return items if isinstance(items, list) else [items]
+    items = items if isinstance(items, list) else [items]
+    if any(not isinstance(record, dict) for record in items):
+        raise OnbidError('response_format')
+    return items
 
 
 def _unit_price(raw) -> int | None:
@@ -127,7 +126,7 @@ def _unit_price(raw) -> int | None:
     return amount // max(qty, 1)
 
 
-def evidence(name: str, diagnostics=None) -> list[dict]:
+def evidence(name: str, diagnostics=None, *, strict=False) -> list[dict]:
     """품목의 개별 매각 낙찰 기록 (묶음·무관 물건 제외)."""
     key = _key()
     if not key:
@@ -139,10 +138,23 @@ def evidence(name: str, diagnostics=None) -> list[dict]:
     for kw in keywords_for(name):
         try:
             items = _query(kw, key)
-        except Exception as exc:
+        except OnbidError as exc:
+            logger.warning('Onbid lookup failed: category=%s http=%s api_code=%s',
+                           exc.category, exc.http_status, exc.api_code)
             if diagnostics is not None:
-                status = str(exc) if isinstance(exc, OnbidAPIError) else ('HTTP_' + str(exc.code) if hasattr(exc, 'code') else type(exc).__name__)
-                diagnostics.append({'item': name, 'keyword': kw, 'status': status})
+                diagnostics.append({'item': name, 'keyword': kw,
+                    'status': 'API_ERROR_' + exc.api_code if exc.api_code else 'API_REQUEST_FAILED',
+                    'category': exc.category, 'http_status': exc.http_status, 'api_code': exc.api_code})
+            if strict:
+                raise
+            continue
+        except Exception:
+            logger.warning('Onbid lookup failed: category=unexpected')
+            if diagnostics is not None:
+                diagnostics.append({'item': name, 'keyword': kw, 'status': 'API_REQUEST_FAILED',
+                                    'category': 'unexpected'})
+            if strict:
+                raise OnbidError('unexpected') from None
             continue
         accepted_before = len(rows)
         excluded_reasons = {}

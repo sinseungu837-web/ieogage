@@ -139,7 +139,7 @@ def collect_onbid(diagnostics=None):
         raise MissingAPIKey('MISSING_API_KEY: DATA_GO_KR_KEY')
     rows = []
     for name in listings.ITEM_WORDS:
-        for record in price.evidence(name, diagnostics=diagnostics):
+        for record in price.evidence(name, diagnostics=diagnostics, strict=True):
             # 물건관리번호가 없는 API 기록은 안정적인 원본 식별 불가.
             if not record['물건관리번호']:
                 continue
@@ -246,6 +246,14 @@ def main():
         print('MISSING_API_KEY: DATA_GO_KR_KEY 미설정 · API 미조회 (매물 부족과 다름) · 기존 DB 유지')
         return 1
     except Exception as exc:
+        from onbid_api import OnbidError
+        if isinstance(exc, OnbidError):
+            if getattr(args, 'report', None):
+                Path(args.report).write_text(json.dumps({'status': 'API_REQUEST_FAILED',
+                    'category': exc.category, 'http_status': exc.http_status,
+                    'api_code': exc.api_code, 'queries': report}, ensure_ascii=False, indent=2), encoding='utf-8')
+            print(f'수집 실패 · 유형={exc.category} HTTP={exc.http_status} API코드={exc.api_code} · 기존 DB 유지')
+            return 1
         # API 오류 메시지는 키가 포함된 URL을 담을 수 있어 원문을 출력하지 않는다.
         print(f'수집 실패 ({type(exc).__name__}) · 기존 DB 유지. 출처 정책/설정/키를 확인하세요.')
         return 1

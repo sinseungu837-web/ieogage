@@ -1,0 +1,274 @@
+{
+  "date_kst": "2026-11-12",
+  "authentication": "not_verified",
+  "new_onbid_records": 0,
+  "attempts": [
+    {
+      "label": "minimal",
+      "parameters": {
+        "pageNo": 1,
+        "numOfRows": 10,
+        "resultType": "json",
+        "cltrTypeCd": "0003",
+        "prptDivCd": "0004",
+        "opbdDtStart": "20251101",
+        "opbdDtEnd": "20251107"
+      },
+      "http_status": null,
+      "result": "network_timeout"
+    },
+    {
+      "label": "official-sample-dates",
+      "parameters": {
+        "pageNo": 1,
+        "numOfRows": 10,
+        "resultType": "json",
+        "cltrTypeCd": "0001",
+        "prptDivCd": "0007",
+        "opbdDtStart": "20241119",
+        "opbdDtEnd": "20241120"
+      },
+      "http_status": null,
+      "result": "network_timeout"
+    },
+    {
+      "label": "property-0007",
+      "parameters": {
+        "pageNo": 1,
+        "numOfRows": 10,
+        "resultType": "json",
+        "cltrTypeCd": "0003",
+        "prptDivCd": "0007",
+        "opbdDtStart": "20251101",
+        "opbdDtEnd": "20251107"
+      },
+      "http_status": null,
+      "result": "network_timeout"
+    },
+    {
+      "label": "past-one-day",
+      "parameters": {
+        "pageNo": 1,
+        "numOfRows": 10,
+        "resultType": "json",
+        "cltrTypeCd": "0003",
+        "prptDivCd": "0004",
+        "opbdDtStart": "20260105",
+        "opbdDtEnd": "20260106"
+      },
+      "http_status": 400,
+      "result": "parameter_error",
+      "api_code": "10"
+    },
+    {
+      "label": "minimal-https",
+      "parameters": {
+        "pageNo": 1,
+        "numOfRows": 10,
+        "resultType": "json",
+        "cltrTypeCd": "0003",
+        "prptDivCd": "0004",
+        "opbdDtStart": "20251101",
+        "opbdDtEnd": "20251107"
+      },
+      "http_status": 503,
+      "result": "upstream_connection_timeout"
+    },
+    {
+      "label": "raw-key-short",
+      "parameters": {
+        "pageNo": 1,
+        "numOfRows": 10,
+        "resultType": "json",
+        "cltrTypeCd": "0003",
+        "prptDivCd": "0004",
+        "opbdDtStart": "20251101",
+        "opbdDtEnd": "20251107"
+      },
+      "http_status": null,
+      "result": "network_timeout"
+    },
+    {
+      "label": "baseline-repeat",
+      "parameters": {
+        "pageNo": 1,
+        "numOfRows": 10,
+        "resultType": "json",
+        "cltrTypeCd": "0003",
+        "prptDivCd": "0004",
+        "opbdDtStart": "20260105",
+        "opbdDtEnd": "20260106"
+      },
+      "http_status": 400,
+      "result": "parameter_error",
+      "api_code": "10"
+    },
+    {
+      "label": "only-property-change",
+      "parameters": {
+        "pageNo": 1,
+        "numOfRows": 10,
+        "resultType": "json",
+        "cltrTypeCd": "0003",
+        "prptDivCd": "0007",
+        "opbdDtStart": "20260105",
+        "opbdDtEnd": "20260106"
+      },
+      "http_status": null,
+      "result": "network_timeout"
+    },
+    {
+      "label": "only-type-change",
+      "parameters": {
+        "pageNo": 1,
+        "numOfRows": 10,
+        "resultType": "json",
+        "cltrTypeCd": "0001",
+        "prptDivCd": "0004",
+        "opbdDtStart": "20260105",
+        "opbdDtEnd": "20260106"
+      },
+      "http_status": null,
+      "result": "network_timeout"
+    },
+    {
+      "label": "only-date-change",
+      "parameters": {
+        "pageNo": 1,
+        "numOfRows": 10,
+        "resultType": "json",
+        "cltrTypeCd": "0003",
+        "prptDivCd": "0004",
+        "opbdDtStart": "20251001",
+        "opbdDtEnd": "20251002"
+      },
+      "http_status": 400,
+      "result": "parameter_error",
+      "api_code": "10"
+    },
+    {
+      "label": "only-multi-property",
+      "parameters": {
+        "pageNo": 1,
+        "numOfRows": 10,
+        "resultType": "json",
+        "cltrTypeCd": "0003",
+        "prptDivCd": "0007,0005",
+        "opbdDtStart": "20260105",
+        "opbdDtEnd": "20260106"
+      },
+      "http_status": 400,
+      "result": "parameter_error",
+      "api_code": "10"
+    },
+    {
+      "label": "only-page-size",
+      "parameters": {
+        "pageNo": 1,
+        "numOfRows": 100,
+        "resultType": "json",
+        "cltrTypeCd": "0003",
+        "prptDivCd": "0004",
+        "opbdDtStart": "20260105",
+        "opbdDtEnd": "20260106"
+      },
+      "http_status": 400,
+      "result": "parameter_error",
+      "api_code": "10"
+    },
+    {
+      "label": "only-status",
+      "parameters": {
+        "pageNo": 1,
+        "numOfRows": 10,
+        "resultType": "json",
+        "cltrTypeCd": "0003",
+        "prptDivCd": "0004",
+        "opbdDtStart": "20260105",
+        "opbdDtEnd": "20260106",
+        "pbctStatCd": "0010"
+      },
+      "http_status": 400,
+      "result": "parameter_error",
+      "api_code": "10"
+    },
+    {
+      "label": "only-keyword",
+      "parameters": {
+        "pageNo": 1,
+        "numOfRows": 10,
+        "resultType": "json",
+        "cltrTypeCd": "0003",
+        "prptDivCd": "0004",
+        "opbdDtStart": "20260105",
+        "opbdDtEnd": "20260106",
+        "onbidCltrNm": "제빙기"
+      },
+      "http_status": 400,
+      "result": "parameter_error",
+      "api_code": "10"
+    },
+    {
+      "label": "only-two-year-range",
+      "parameters": {
+        "pageNo": 1,
+        "numOfRows": 10,
+        "resultType": "json",
+        "cltrTypeCd": "0003",
+        "prptDivCd": "0004",
+        "opbdDtStart": "20240107",
+        "opbdDtEnd": "20260106"
+      },
+      "http_status": 400,
+      "result": "parameter_error",
+      "api_code": "10"
+    },
+    {
+      "label": "negative-auth-control",
+      "parameters": {
+        "pageNo": 1,
+        "numOfRows": 10,
+        "resultType": "json",
+        "cltrTypeCd": "0003",
+        "prptDivCd": "0004",
+        "opbdDtStart": "20260105",
+        "opbdDtEnd": "20260106"
+      },
+      "http_status": 400,
+      "result": "parameter_error",
+      "api_code": "10"
+    },
+    {
+      "case": "minimal",
+      "scheme": "http",
+      "parameters": {
+        "pageNo": 1,
+        "numOfRows": 10,
+        "resultType": "json",
+        "cltrTypeCd": "0003",
+        "prptDivCd": "0004",
+        "opbdDtStart": "20260105",
+        "opbdDtEnd": "20260106"
+      },
+      "category": "network_timeout",
+      "http_status": null,
+      "api_code": null
+    },
+    {
+      "case": "minimal",
+      "scheme": "https",
+      "parameters": {
+        "pageNo": 1,
+        "numOfRows": 10,
+        "resultType": "json",
+        "cltrTypeCd": "0003",
+        "prptDivCd": "0004",
+        "opbdDtStart": "20260105",
+        "opbdDtEnd": "20260106"
+      },
+      "category": "upstream_connection_timeout",
+      "http_status": 503,
+      "api_code": null
+    }
+  ]
+}
