@@ -16,6 +16,7 @@ import vision
 
 from box_selector import select_box, validated_box
 from inventory import inventory_rows
+from estimate_view import safe_estimate
 
 BASE = Path(__file__).parent
 load_dotenv(BASE / ".env")
@@ -517,12 +518,7 @@ def final_page(last):
     estimates = []
     with st.spinner('저장된 가격 DB와 보조 공매 기록을 확인하는 중...'):
         for row in rows:
-            try:
-                result = cached_estimate(row['집기명'], row['제조사'], row.get('모델명', ''),
-                                         row.get('사양', ''), row.get('상태', ''), price.db_revision())
-            except Exception:
-                result = price.empty_estimate(row['집기명'], '가격 조회 오류 · 가격 근거 부족')
-            estimates.append(result)
+            estimates.append(safe_estimate(row, price, cached_estimate))
     priced = [(r, e) for r, e in zip(rows, estimates) if e['mid'] is not None]
     low = sum(e['low'] * r['개수'] for r, e in priced)
     mid = sum(e['mid'] * r['개수'] for r, e in priced)

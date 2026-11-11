@@ -200,7 +200,7 @@ def estimate(name: str, manufacturer='', model='', spec='', condition='', *,
     result = empty_estimate(name)
     try:
         data = listings.production(listings.read(listings_path or listings.LISTINGS))
-        data = data[data.item == listings.item(name)]
+        data = data[data['item'] == listings.item(name)]
         if brand:
             data = data[data.manufacturer == brand]
         if condition:
