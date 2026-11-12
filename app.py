@@ -572,7 +572,7 @@ def final_page(last):
     prices['신뢰도'] = [x['confidence'] for x in e]
     prices['최근 수집일'] = [x['collected_at'] for x in e]
     prices['직접 검색'] = [x['search_url'] for x in e]
-    money = st.column_config.NumberColumn(format='%d')
+    money = st.column_config.NumberColumn(format='localized')  # 6,000,000 처럼 3자리마다 쉼표
     st.dataframe(prices, hide_index=True, use_container_width=True, column_config={
         '개당 시세 하한 (원)': money, '개당 대표 가격 (원)': money, '개당 시세 상한 (원)': money,
         '예상 매각액 하한 (원)': money, '예상 매각액 상한 (원)': money,
@@ -585,8 +585,14 @@ def final_page(last):
     with st.expander('가격 근거 보기 (출처·원본 매물·수집일)'):
         ev = [{'집기명': r['집기명'], '입력 제조사': r['제조사'], **record}
               for r, x in zip(rows, e) for record in x['evidence']]
-        st.dataframe(pd.DataFrame(ev), hide_index=True, use_container_width=True,
-                     column_config={'url': st.column_config.LinkColumn('원본 매물/검색', display_text='보기')})
+        ev_frame = pd.DataFrame(ev)
+        for col in ('price', '낙찰가'):  # 근거 표의 가격도 3자리 쉼표로 (숫자형으로 맞춘 뒤 표시 형식만 지정)
+            if col in ev_frame:
+                ev_frame[col] = pd.to_numeric(ev_frame[col], errors='coerce')
+        st.dataframe(ev_frame, hide_index=True, use_container_width=True,
+                     column_config={'url': st.column_config.LinkColumn('원본 매물/검색', display_text='보기'),
+                                    'price': st.column_config.NumberColumn('가격 (원)', format='localized'),
+                                    '낙찰가': st.column_config.NumberColumn('낙찰가 (원)', format='localized')})
     export = prices
     if supplies:
         bundle = {'집기명': '재고·소모품 묶음 (' + ', '.join(f"{r['집기명']} {r['개수']}" for r in supplies) + ')',
