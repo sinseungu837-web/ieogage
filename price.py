@@ -17,6 +17,7 @@ ONBID_URL = "https://apis.data.go.kr/B010003/OnbidCltrBidRsltListSrvc2/getCltrBi
 ALL_PRPT = "0007,0010,0005,0004,0002,0003,0006,0008,0011,0013"  # 재산유형 전체
 LOOKBACK_DAYS = 730  # 최근 2년 낙찰만
 MIN_SAMPLES = 3      # 이 미만이면 '추정 불가'
+LIVE_SEARCH = True   # DB 근거 부족 시 헬로마켓 실시간 검색 보완 (등록 출처: data/sources.json)
 MIN_WON, MAX_WON = 1_000, 50_000_000
 
 # 품목명(한국어) → 온비드 물건명 검색어. 없으면 이름의 마지막 단어로 검색
@@ -226,7 +227,7 @@ def empty_estimate(name, reason='가격 근거 부족', n=0):
 
 
 def estimate(name: str, manufacturer='', model='', spec='', condition='', *,
-             listings_path=None, allow_onbid=True, diagnostics=None):
+             listings_path=None, allow_onbid=True, diagnostics=None, allow_live=None):
     """최소 3건, Q1/중앙값/Q3. 샘플·180일 초과·묶음·외화 제외.
 
     모델/사양이 확인되면 맞지 않는 제품으로 표본을 채우지 않는다.
@@ -294,6 +295,28 @@ def estimate(name: str, manufacturer='', model='', spec='', condition='', *,
         if diagnostics is not None:
             diagnostics.append({'stage': 'db_error', 'error': type(exc).__name__})
         result['source'] = '가격 DB 조회 오류 · 가격 근거 부족'
+    if allow_live is None:
+        # 외부 조회가 허용되고(allow_onbid) 서비스 키가 설정된 배포 환경에서만 실시간 검색 (테스트·키 없는 로컬은 끔)
+        allow_live = LIVE_SEARCH and allow_onbid and bool(_key())
+    if allow_live:
+        # DB 근거가 부족하면 헬로마켓 검색 결과를 실시간으로 보완 (판매 중 게시 가격, 최근 180일). 앱에서만 켠다.
+        try:
+            import crawler
+            live = listings.normalize(crawler.live_rows(listings.item(name)))
+            if model:
+                same = live[live.title.map(listings.token).str.contains(listings.token(model), regex=False)]
+                live = same if len(same) >= MIN_SAMPLES else live.iloc[0:0]
+            vals = _drop_outliers(sorted(int(v) for v in live.price))
+            if len(vals) >= MIN_SAMPLES:
+                q1, mid, q3 = statistics.quantiles(vals, n=4)
+                return {**result, 'low': int(q1), 'mid': int(statistics.median(vals)), 'high': int(q3),
+                        'n': len(vals), 'price_basis': 'asking', 'confidence': '낮음',
+                        'match': ('동일 모델명 포함' if model else '품목만 확인된') + ' 실시간 검색',
+                        'source': f'판매 중 매물의 게시 가격 기준 참고 시세 · 헬로마켓 실시간 검색 {len(vals)}건',
+                        'collected_at': listings.today().isoformat(),
+                        'evidence': live[live.price.isin(vals)].to_dict('records')}
+        except Exception:
+            pass
     if allow_onbid:
         try:
             fallback = onbid_estimate(name, manufacturer, model, spec, condition)

@@ -5,7 +5,9 @@
 from __future__ import annotations
 
 import argparse
+import html as html_lib
 import json
+import re
 import time
 import urllib.request
 import urllib.robotparser
@@ -133,6 +135,95 @@ def crawl(name, urls, item, registry=SOURCES):
     return rows
 
 
+# ---------------- 헬로마켓 (등록 출처: data/sources.json) ----------------
+HELLO = '헬로마켓'
+# 품목 → 헬로마켓 검색어. 업소용 장비 위주로 좁힌다.
+SEARCH_QUERIES = {'커피머신': ['에스프레소 머신', '커피머신 업소용'], '커피 그라인더': ['커피 그라인더'],
+                  '제빙기': ['제빙기'], '업소용 냉장고': ['업소용 냉장고'], '테이블': ['카페 테이블', '테이블 업소용'], '의자': ['카페 의자', '카페 체어']}
+PHONE = re.compile(r'\d[\d\- ]{7,}\d')  # 제목 속 전화번호 등 긴 숫자열은 저장하지 않는다
+AGE = re.compile(r'(\d+)\s*(분|시간|일|개월|년)\s*전')
+# 중고 시세에 넣지 않을 매물: 새 제품, 다른 장비와 함께 파는 묶음
+NOT_USED = re.compile(r'새상품|새제품|새 제품|미개봉|신품|포함')
+OTHER_DEVICE = {'커피 그라인더': re.compile(r'머신|메이커')}
+
+
+def _usable(item, title):
+    return not NOT_USED.search(title) and not (item in OTHER_DEVICE and OTHER_DEVICE[item].search(title))
+
+
+def _clean_title(title):
+    return re.sub(r'\s+', ' ', PHONE.sub('', title)).strip()
+
+
+def _age_days(text):
+    m = AGE.search(text or '')
+    if not m:
+        return None
+    n, unit = int(m.group(1)), m.group(2)
+    return {'분': 0, '시간': 0, '일': n, '개월': n * 30, '년': n * 365}[unit]
+
+
+def _robot(origin):
+    robot = urllib.robotparser.RobotFileParser()
+    robot.parse(fetch(origin + '/robots.txt').splitlines())
+    return robot
+
+
+def search_cards(query, name=HELLO, registry=SOURCES):
+    """검색 결과 1페이지의 카드(제목·가격·등록 시점·링크). 요청 1회."""
+    config = source_for(name, registry)
+    origin = config['origin'].rstrip('/')
+    url = f'{origin}/search?q={quote(query)}'
+    if not _robot(origin).can_fetch(USER_AGENT, url):
+        raise ValueError('robots 정책 불일치')
+    page = fetch(url)
+    cards, seen = [], set()
+    chunks = re.split(r'href="(/item/\d+)', page)
+    for href, body in zip(chunks[1::2], chunks[2::2]):
+        if href in seen:
+            continue
+        parts = [html_lib.unescape(p).strip() for p in re.split(r'<[^>]+>', body[:1500]) if p.strip()]
+        price_i = next((i for i, p in enumerate(parts) if re.fullmatch(r'[\d,]+\s*원', p)), None)
+        if price_i is None or price_i + 1 >= len(parts):
+            continue
+        seen.add(href)
+        age = next((_age_days(p) for p in parts[price_i + 1:price_i + 5] if _age_days(p) is not None), None)
+        cards.append({'title': _clean_title(parts[price_i + 1]), 'price': parts[price_i].replace(',', '').replace('원', '').strip(),
+                      'url': origin + href, 'age_days': age})
+    return cards
+
+
+def live_rows(item, max_age=180, name=HELLO):
+    """서비스 요청 중 실시간 보완용. 검색 결과 카드만 사용 (품목당 요청 1~2회)."""
+    rows = []
+    for query in SEARCH_QUERIES.get(item, [item]):
+        for card in search_cards(query, name):
+            if card['age_days'] is None or card['age_days'] > max_age or not _usable(item, card['title']):
+                continue
+            rows.append(dict(item=item, manufacturer='', model='', spec='', title=card['title'], condition='중고',
+                             price=card['price'], currency='KRW', sale_status='for_sale', price_basis='asking',
+                             quantity=1, source=name + ' (실시간 검색)', url=card['url'],
+                             collected_at=listings.today().isoformat(), is_sample='false'))
+    return rows
+
+
+def discover(item, limit=12, name=HELLO, registry=SOURCES):
+    """검색 → 매물 페이지(JSON-LD Product)를 열어 DB용 행을 만든다. 판매자 정보는 저장하지 않는다."""
+    config = source_for(name, registry)
+    delay = max(2, float(config.get('delay_seconds', 2)))
+    urls = []
+    for query in SEARCH_QUERIES.get(item, [item]):
+        for card in search_cards(query, name, registry):
+            if card['age_days'] is not None and card['age_days'] <= 180 and card['url'] not in urls                     and _usable(item, card['title']):
+                urls.append(card['url'])
+        time.sleep(delay)
+    rows = crawl(name, urls[:limit], item, registry)
+    for r in rows:
+        r['manufacturer'] = ''  # 헬로마켓 JSON-LD 의 brand 는 판매자 닉네임이라 저장하지 않음
+        r['title'] = _clean_title(r['title'])
+    return rows
+
+
 def collect_onbid(diagnostics=None):
     import price
     if not price._key():
@@ -199,6 +290,9 @@ def main():
     web.add_argument('--source', required=True)
     web.add_argument('--item', required=True, choices=list(listings.ITEM_WORDS))
     web.add_argument('urls', nargs='+')
+    hello = sub.add_parser('hellomarket', help='헬로마켓 검색 → 매물 페이지 수집 (품목 미지정 시 전체)')
+    hello.add_argument('--item', choices=list(listings.ITEM_WORDS))
+    hello.add_argument('--limit', type=int, default=12)
     imported = sub.add_parser('import-csv')
     imported.add_argument('file')
     imported.add_argument('--source', required=True)
@@ -233,6 +327,12 @@ def main():
                 return 1
         elif args.command == 'crawl':
             rows = crawl(args.source, args.urls, args.item)
+        elif args.command == 'hellomarket':
+            rows = []
+            for name in ([args.item] if args.item else list(listings.ITEM_WORDS)):
+                got = discover(name, args.limit)
+                print(f'{name}: 매물 {len(got)}건 수집')
+                rows.extend(got)
         else:
             config = source_for(args.source)
             rows = listings.read(args.file).to_dict('records')

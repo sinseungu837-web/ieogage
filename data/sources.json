@@ -1,1 +1,11 @@
-{}
+{
+  "헬로마켓": {
+    "enabled": true,
+    "automation_allowed": true,
+    "origin": "https://www.hellomarket.com",
+    "terms_url": "https://www.hellomarket.com/terms.hm",
+    "checked_at": "2026-11-12",
+    "delay_seconds": 3,
+    "permission_evidence": "robots.txt 'User-agent: * / Allow: /' (2026-11-12 확인). 이용약관(2023-02-23 시행)에 크롤링·자동 수집 금지 조항 없음. 제22조④는 회사에 지적재산권이 귀속된 정보의 영리 목적 복제만 금지 → 제목·가격·등록 시점·원문 링크만 저장하고 판매자 정보·이미지·설명은 저장하지 않음."
+  }
+}
