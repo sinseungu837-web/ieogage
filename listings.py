@@ -33,6 +33,26 @@ ITEM_WORDS = {'커피머신': ['커피머신', '에스프레소'], '커피 그�
 BUNDLE = re.compile(r'일괄|묶음|세트|외\s*\d|(?<!\d)(?:[2-9]|[1-9]\d+)\s*(?:개|대|점|조)|및|\+|[^/\s]+/[^/\s]+/|\S외$')
 IRRELEVANT = re.compile(r'부품|고장|수리용|삽니다|매입합니다|렌탈|대여|원두|의료|실험|가정용|장난감|무료나눔|휴대용|캠핑|소파|쇼파')
 
+# 용량·규격: 숫자+단위만 인정 (단위 없는 숫자는 모델 번호일 수 있어 쓰지 않음)
+SPEC = re.compile(r'(\d{1,4})\s*(kg|키로|킬로|그룹|group|박스|mm)(?![a-z])', re.I)
+SPEC_UNIT = {'키로': 'kg', '킬로': 'kg', 'group': '그룹'}
+
+
+def spec_key(value):
+    """'50키로'·'50 KG' → '50kg', '2 group' → '2그룹'. 단위가 없으면 공백만 제거한 원문."""
+    text = str(value or '')
+    if re.search(r'\d\s*[x×*]\s*\d', text, re.I):  # 1800×750mm 같은 치수는 통째로 비교
+        return re.sub(r'[×*]', 'x', token(text)).removesuffix('mm')
+    found = SPEC.findall(text)
+    if not found:
+        return token(value)
+    return ','.join(sorted({n + SPEC_UNIT.get(u.lower(), u.lower()) for n, u in found}))
+
+
+def spec_from_title(title):
+    found = SPEC.findall(str(title or ''))
+    return spec_key(title) if found else ''
+
 
 def today():
     return datetime.now(timezone(timedelta(hours=9))).date()
@@ -114,6 +134,8 @@ def normalize(rows, diagnostics=None):
                 r['url'] = canonical_url(r['url'])
             except ValueError:
                 raise ValueError('invalid_public_url') from None
+            if not r['spec']:
+                r['spec'] = spec_from_title(r['title'])  # 제목의 용량(50kg·2그룹 등)으로 같은 사양끼리만 비교
             r.update(price=int(p), quantity=1, collected_at=collected.isoformat(),
                      is_sample=r['is_sample'].lower(), _row=index)
             valid.append(r)
@@ -149,11 +171,8 @@ def production(frame, max_age=180):
     return frame[(frame.is_sample == 'false') & (frame.collected_at >= cutoff)]
 
 
-def summary(frame, verification_path=None):
+def summary(frame):
     rows = []
-    if verification_path is not None:
-        from price_quality import eligible
-        frame = eligible(frame, verification_path)
     # 출처·가격 성격을 분리. 상세 매칭은 price.py에서 매물 원본으로 수행한다.
     for keys, group in production(frame).groupby(['item', 'manufacturer', 'model', 'spec', 'condition', 'source', 'price_basis']):
         name, brand, model, spec, cond, source, basis = keys
@@ -183,7 +202,5 @@ def save(rows, path=LISTINGS, table_path=BASE / 'price_table.csv'):
         return 0  # 실패/빈 응답이면 기존 파일을 건드리지 않는다.
     combined = normalize(old.to_dict('records') + new.to_dict('records'))
     atomic_csv(combined, path)
-    from price_quality import LEDGER
-    verification_path = LEDGER if Path(path).resolve() == LISTINGS.resolve() else None
-    atomic_csv(summary(combined, verification_path), table_path)
+    atomic_csv(summary(combined), table_path)
     return len(new)

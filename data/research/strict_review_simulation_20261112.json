@@ -1,4 +1,5 @@
 {
+  "purpose": "엄격한 검증 기준을 적용한 조사 단계 시뮬레이션. 현재 운영 견적 필터가 아니며 PR 최종안에는 검증 정책 변경을 포함하지 않음.",
   "raw_records": 99,
   "normalized_records": 99,
   "duplicate_urls": 0,

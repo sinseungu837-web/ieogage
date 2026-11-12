@@ -12,7 +12,6 @@ import statistics
 import urllib.parse
 import urllib.request
 from datetime import date, timedelta
-from onbid_api import request_body, OnbidError
 
 ONBID_URL = "https://apis.data.go.kr/B010003/OnbidCltrBidRsltListSrvc2/getCltrBidRsltList2"
 ALL_PRPT = "0007,0010,0005,0004,0002,0003,0006,0008,0011,0013"  # 재산유형 전체
@@ -101,7 +100,8 @@ def keywords_for(name: str) -> list[str]:
     return [words[-1]] if words else []
 
 
-OnbidAPIError = OnbidError
+class OnbidAPIError(RuntimeError):
+    pass
 
 
 def _query(keyword: str, key: str) -> list[dict]:
@@ -112,7 +112,15 @@ def _query(keyword: str, key: str) -> list[dict]:
         "opbdDtStart": (end - timedelta(days=LOOKBACK_DAYS)).strftime("%Y%m%d"),
         "opbdDtEnd": end.strftime("%Y%m%d"), "onbidCltrNm": keyword,
     }
-    body = request_body(ONBID_URL + "?" + urllib.parse.urlencode(params))
+    with urllib.request.urlopen(ONBID_URL + "?" + urllib.parse.urlencode(params), timeout=15) as r:
+        payload = json.load(r)
+    payload = payload.get('response', payload)
+    code = str((payload.get('header') or {}).get('resultCode', '00'))
+    if code not in ('0', '00', '0000'):
+        raise OnbidAPIError('API_ERROR_' + code if code.isdigit() else 'API_RESPONSE_ERROR')
+    if 'body' not in payload:
+        raise OnbidAPIError('API_RESPONSE_ERROR')
+    body = payload['body']
     items = (body.get("items") or {})
     items = items.get("item", []) if isinstance(items, dict) else items
     return items if isinstance(items, list) else [items]
@@ -130,7 +138,7 @@ def _unit_price(raw) -> int | None:
     return amount // max(qty, 1)
 
 
-def evidence(name: str, diagnostics=None, *, strict=False) -> list[dict]:
+def evidence(name: str, diagnostics=None) -> list[dict]:
     """품목의 개별 매각 낙찰 기록 (묶음·무관 물건 제외)."""
     key = _key()
     if not key:
@@ -144,15 +152,8 @@ def evidence(name: str, diagnostics=None, *, strict=False) -> list[dict]:
             items = _query(kw, key)
         except Exception as exc:
             if diagnostics is not None:
-                diagnostics.append({'item': name, 'keyword': kw,
-                    'status': 'API_ERROR_' + exc.api_code if isinstance(exc, OnbidError) and exc.api_code else 'API_REQUEST_FAILED',
-                    'category': exc.category if isinstance(exc, OnbidError) else 'unexpected',
-                    'api_code': exc.api_code if isinstance(exc, OnbidError) else None,
-                    'http_status': exc.http_status if isinstance(exc, OnbidError) else None})
-            if strict:
-                if isinstance(exc, OnbidError):
-                    raise
-                raise OnbidError('unexpected') from None
+                status = str(exc) if isinstance(exc, OnbidAPIError) else ('HTTP_' + str(exc.code) if hasattr(exc, 'code') else type(exc).__name__)
+                diagnostics.append({'item': name, 'keyword': kw, 'status': status})
             continue
         accepted_before = len(rows)
         excluded_reasons = {}
@@ -280,16 +281,11 @@ def new_price_estimate(name: str) -> dict:
 # 새 경로: 사전 수집 CSV 우선. 게시 가격과 공매 낙찰가는 결합하지 않는다.
 def db_revision():
     from listings import LISTINGS
-    from price_quality import LEDGER
-    revisions = []
-    for path in (LISTINGS, LEDGER):
-        try:
-            stat = path.stat()
-            revisions.append((stat.st_mtime_ns, stat.st_size))
-        except OSError:
-            revisions.append(None)
-    import listings
-    return (listings.today().isoformat(), *revisions)
+    try:
+        stat = LISTINGS.stat()
+        return (stat.st_mtime_ns, stat.st_size)
+    except OSError:
+        return None
 
 
 def empty_estimate(name, reason='가격 근거 부족', n=0):
@@ -300,17 +296,13 @@ def empty_estimate(name, reason='가격 근거 부족', n=0):
 
 
 def estimate(name: str, manufacturer='', model='', spec='', condition='', *,
-             listings_path=None, allow_onbid=True, diagnostics=None, allow_live=None,
-             verification_path=None):
+             listings_path=None, allow_onbid=True, diagnostics=None, allow_live=None):
     """최소 3건, Q1/중앙값/Q3. 샘플·180일 초과·묶음·외화 제외.
 
     모델/사양이 확인되면 맞지 않는 제품으로 표본을 채우지 않는다.
     동일 제조사·사양 fallback도 입력 사양이 명시된 경우에만 허용한다.
     """
     import listings
-    import price_quality
-    from pathlib import Path
-    production_db = Path(listings_path or listings.LISTINGS).resolve() == listings.LISTINGS.resolve()
     brand = listings.maker(manufacturer)
     result = empty_estimate(name)
     def trace(stage, frame):
@@ -320,9 +312,6 @@ def estimate(name: str, manufacturer='', model='', spec='', condition='', *,
         stored = listings.read(listings_path or listings.LISTINGS)
         trace('normalized_db', stored)
         data = listings.production(stored)
-        if production_db or verification_path is not None:
-            data = price_quality.eligible(data, verification_path or price_quality.LEDGER)
-            trace('verified_snapshot', data)
         trace('recent_real_records', data)
         data = data[data['item'] == listings.item(name)]
         trace('item', data)
@@ -337,6 +326,9 @@ def estimate(name: str, manufacturer='', model='', spec='', condition='', *,
             if not exact.empty:
                 data = exact
                 match = '동일 품목·제조사·모델' if brand else '동일 품목·모델 (제조사 미확인)'
+            elif spec:
+                data = data[data.spec.map(listings.spec_key) == listings.spec_key(spec)]
+                match = '동일 품목·동일 사양' + ('·제조사' if brand else '')
             else:
                 data = exact
                 match = '동일 모델 근거 부족'
@@ -344,12 +336,9 @@ def estimate(name: str, manufacturer='', model='', spec='', condition='', *,
             match = '동일 품목·제조사 참고 시세' if brand else '품목만 확인된 참고 시세'
         trace('model_or_spec_fallback', data)
         if spec:
-            data = data[data.spec.map(listings.token) == listings.token(spec)]
+            data = data[data.spec.map(listings.spec_key) == listings.spec_key(spec)]
             match += '·동일 사양'
             trace('spec', data)
-        if not model:
-            data = price_quality.cohort(data)
-            match += ' · 단일 모델·사양군 참고'
         if not data.empty:
             # 서로 다른 가격 성격을 섞지 않음. 충분한 게시 가격 우선, 없으면 가장 많은 군집.
             cohorts = [(basis, data[data.price_basis == basis])
@@ -380,32 +369,34 @@ def estimate(name: str, manufacturer='', model='', spec='', condition='', *,
     if allow_live is None:
         # 외부 조회가 허용되고(allow_onbid) 서비스 키가 설정된 배포 환경에서만 실시간 검색 (테스트·키 없는 로컬은 끔)
         allow_live = LIVE_SEARCH and allow_onbid and bool(_key())
-    if allow_live and brand and model:
+    if allow_live:
         # DB 근거가 부족하면 헬로마켓 검색 결과를 실시간으로 보완 (판매 중 게시 가격, 최근 180일). 앱에서만 켠다.
         try:
             import crawler
-            raw_live = [r for r in crawler.live_rows(listings.item(name)) if r.get('_detail_verified')]
-            live = listings.normalize(raw_live)
-            for value in (brand, model, spec):
-                if value:
-                    pattern = r'(?<![a-z0-9])' + re.escape(listings.token(value)) + r'(?![a-z0-9])'
-                    live = live[live.title.map(listings.token).str.contains(pattern, regex=True)]
-            if condition:
-                live = live[live.condition.map(listings.token) == listings.token(condition)]
+            live = listings.normalize(crawler.live_rows(listings.item(name)))
+            # 입력한 조건(제조사·모델·용량)이 제목에 모두 있는 매물만. 3건 미만이면 다른 제품으로 채우지 않는다.
+            if brand:
+                names = {listings.token(brand)} | {k for k, v in listings.MAKERS.items() if v == brand}
+                live = live[live.title.map(listings.token).map(lambda t: any(n in t for n in names))]
+            if model:
+                live = live[live.title.map(listings.token).str.contains(listings.token(model), regex=False)]
+            if spec:
+                live = live[live.title.map(listings.spec_key).str.contains(listings.spec_key(spec), regex=False)]
+            if len(live) < MIN_SAMPLES:
+                live = live.iloc[0:0]
             vals = _drop_outliers(sorted(int(v) for v in live.price))
             if len(vals) >= MIN_SAMPLES:
-                import pandas as pd
-                q1, mid, q3 = pd.Series(vals).quantile([.25, .5, .75])
+                q1, mid, q3 = statistics.quantiles(vals, n=4)
                 return {**result, 'low': int(q1), 'mid': int(statistics.median(vals)), 'high': int(q3),
                         'n': len(vals), 'price_basis': 'asking', 'confidence': '낮음',
-                        'match': ('동일 모델명 포함' if model else '품목만 확인된') + ' 실시간 검색',
+                        'match': ('동일 ' + '·'.join(k for k, v in (('제조사', brand), ('모델', model), ('사양', spec)) if v)
+                                  if (brand or model or spec) else '품목만 확인된') + ' 실시간 검색',
                         'source': f'판매 중 매물의 게시 가격 기준 참고 시세 · 헬로마켓 실시간 검색 {len(vals)}건',
                         'collected_at': listings.today().isoformat(),
                         'evidence': live[live.price.isin(vals)].to_dict('records')}
         except Exception:
             pass
-    # 운영 DB는 검증 이력 없는 실시간 공매/신품 감가 추정으로 우회하지 않는다.
-    if allow_onbid and not production_db and verification_path is None:
+    if allow_onbid:
         try:
             fallback = onbid_estimate(name, manufacturer, model, spec, condition)
             as_onbid = {**result, **fallback, 'price_basis': 'auction',
@@ -415,6 +406,12 @@ def estimate(name: str, manufacturer='', model='', spec='', condition='', *,
                 return as_onbid
         except Exception:
             fallback, as_onbid = {'n': 0}, None
+        try:  # 마지막 예비: 신품가 × 감가 (가구·오븐·모니터)
+            newp = new_price_estimate(name)
+            if newp['mid'] is not None:
+                return newp
+        except Exception:
+            pass
         if as_onbid and not result['n'] and fallback['n']:
             return as_onbid
     return result

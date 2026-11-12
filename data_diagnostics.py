@@ -29,13 +29,10 @@ def diagnose(path=listings.LISTINGS, **query):
         if reasons:
             excluded.append({'url': row['url'], 'reasons': reasons})
     steps = []
-    from price_quality import eligible
-    verified = eligible(listings.production(frame)) if Path(path).resolve() == listings.LISTINGS.resolve() else listings.production(frame)
     result = price.estimate(query.pop('name', ''), listings_path=path, allow_onbid=False,
                             diagnostics=steps, **query)
     return {'db_status': 'EMPTY' if raw.empty else 'OK', 'raw_records': len(raw),
-            'normalized_records': len(frame), 'eligible_records': len(verified),
-            'pending_or_unverified_records': len(frame) - len(verified),
+            'normalized_records': len(frame), 'eligible_records': len(listings.production(frame)),
             'onbid_key_configured': bool(price._key()),
             'normalization_reasons': dict(Counter(d['reason'] for d in decisions if d['status'] == 'excluded')),
             'rows': decisions, 'production_exclusions': excluded, 'matching_steps': steps,
