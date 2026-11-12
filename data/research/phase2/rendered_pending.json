@@ -1,14 +1,17 @@
 [
   {
     "url": "https://cafedirectmall.com/product/detail.html?product_no=124",
-    "error": "Error"
+    "error": "Error",
+    "reason": "Page.goto: net::ERR_CERT_AUTHORITY_INVALID at https://cafedirectmall.com/product/detail.html?product_no=124"
   },
   {
     "url": "https://cafedirectmall.com/product/detail.html?product_no=208",
-    "error": "Error"
+    "error": "Error",
+    "reason": "Page.goto: net::ERR_CERT_AUTHORITY_INVALID at https://cafedirectmall.com/product/detail.html?product_no=208"
   },
   {
     "url": "https://cafedirectmall.com/product/detail.html?product_no=229",
-    "error": "Error"
+    "error": "Error",
+    "reason": "Page.goto: net::ERR_CERT_AUTHORITY_INVALID at https://cafedirectmall.com/product/detail.html?product_no=229"
   }
 ]
