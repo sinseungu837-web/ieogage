@@ -224,6 +224,46 @@ def discover(item, limit=12, name=HELLO, registry=SOURCES):
     return rows
 
 
+def enrich_titles(path=listings.LISTINGS, batch=40):
+    """매물 제목에서 제조사·모델·사양을 Gemini 로 추출해 빈 칸을 채운다.
+    제목에 글자로 실제 들어 있는 값만 남긴다 (지어낸 값 차단). 출처: 헬로마켓·온비드·수동 검증분만 (AI 활용 제한 없음)."""
+    import llm
+    from google.genai import types
+    frame = listings.read(path)
+    todo = frame[(frame.model == '') | (frame.manufacturer == '')].index.tolist()
+    alias = {listings.token(k): v for k, v in listings.MAKERS.items()}
+    filled = 0
+    for start in range(0, len(todo), batch):
+        idx = todo[start:start + batch]
+        lines = '\n'.join(f'{n}. [{frame.at[i, "item"]}] {frame.at[i, "title"]}' for n, i in enumerate(idx))
+        prompt = ('중고 매물 제목 목록이다. 각 제목에서 제조사(브랜드), 모델명, 용량·규격(spec)을 뽑아라.\n'
+                  '- 제목에 글자로 적혀 있는 것만. 없으면 빈 문자열. 추측 금지.\n'
+                  '- model 은 영문·숫자 모델 코드나 제품 시리즈명 (예: IMK-3051, Linea PB). 연식·상태 단어는 넣지 않는다.\n'
+                  '- spec 은 용량·크기 (예: 50kg, 45박스, 2그룹, 1200mm).\n'
+                  'JSON 만: {"rows":[{"n":0,"manufacturer":"","model":"","spec":""}]}\n' + lines)
+        resp = llm._generate(model=llm._model(None), contents=prompt,
+                             config=types.GenerateContentConfig(temperature=0, response_mime_type='application/json'))
+        out = json.loads(resp.text)
+        for r in (out.get('rows', []) if isinstance(out, dict) else out):
+            n = r.get('n')
+            if not isinstance(n, int) or not 0 <= n < len(idx):
+                continue
+            i = idx[n]
+            title_t = listings.token(frame.at[i, 'title'])
+            for col in ('manufacturer', 'model', 'spec'):
+                value = str(r.get(col) or '').strip()
+                if not value or frame.at[i, col]:
+                    continue
+                if listings.token(value) not in title_t:   # 제목에 없는 값은 버림
+                    if not (col == 'manufacturer' and any(a in title_t for a, v in alias.items() if v == listings.maker(value))):
+                        continue
+                frame.at[i, col] = listings.maker(value) if col == 'manufacturer' else value
+                filled += 1
+    listings.atomic_csv(frame, path)
+    listings.atomic_csv(listings.summary(frame), listings.BASE / 'price_table.csv')
+    return {'rows_checked': len(todo), 'fields_filled': filled}
+
+
 def collect_onbid(diagnostics=None):
     import price
     if not price._key():
@@ -293,6 +333,7 @@ def main():
     hello = sub.add_parser('hellomarket', help='헬로마켓 검색 → 매물 페이지 수집 (품목 미지정 시 전체)')
     hello.add_argument('--item', choices=list(listings.ITEM_WORDS))
     hello.add_argument('--limit', type=int, default=12)
+    sub.add_parser('enrich', help='매물 제목에서 제조사·모델·사양 추출 (GEMINI_API_KEY 필요)')
     imported = sub.add_parser('import-csv')
     imported.add_argument('file')
     imported.add_argument('--source', required=True)
@@ -309,6 +350,9 @@ def main():
             from data_diagnostics import diagnose
             print(json.dumps(diagnose(args.file, name=args.item, manufacturer=args.manufacturer,
                 model=args.model, spec=args.spec, condition=args.condition), ensure_ascii=False, indent=2))
+            return 0
+        if args.command == 'enrich':
+            print(json.dumps(enrich_titles(), ensure_ascii=False))
             return 0
         if args.command == 'import-manual':
             print(json.dumps(import_manual(args.file), ensure_ascii=False, indent=2))

@@ -207,6 +207,9 @@ def analyze_photo(image, key):
             "next_id": max([o["id"] for o in det["objects"]], default=0) + 1,
             "pending_box": None,
             "selected_box_id": None,
+            # 사진에서 로고·명판 글자가 읽힌 경우만 채워짐 (3단계 표에서 사용자가 수정 가능)
+            "manufacturers": {o["id"]: o["brand"] for o in det["objects"] if o.get("brand")},
+            "models": {o["id"]: o["model"] for o in det["objects"] if o.get("model")},
         }
         go_to(3)
         return

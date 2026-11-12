@@ -1,5 +1,5 @@
 # 매일 1회 가격 DB 자동 보강: 헬로마켓(등록 출처) + 온비드 공매 낙찰가 → data/listings.csv
-# 필요: GitHub 저장소 Settings → Secrets and variables → Actions 에 DATA_GO_KR_KEY 등록
+# 필요: GitHub 저장소 Settings → Secrets and variables → Actions 에 DATA_GO_KR_KEY, GEMINI_API_KEY 등록
 name: collect-prices
 
 on:
@@ -26,6 +26,10 @@ jobs:
         env:
           DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}
         run: python crawler.py onbid || true
+      - name: 제목에서 제조사·모델 추출
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: pip install google-genai && python crawler.py enrich || true
       - name: 변경 시 커밋
         run: |
           git config user.name "price-collector-bot"

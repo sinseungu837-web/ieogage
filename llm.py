@@ -285,10 +285,11 @@ def detect_all(image, model: str | None = None) -> tuple[dict, dict]:
         '  4) "기타": 꽃병·액자·인형 등 판매 가치가 낮은 장식.',
         "- 집기인지 고정 설비인지 사진만으로 애매하면 고정 설비로 두고 uncertain=true.",
         "- 화면이 달린 기계는 커피머신·포스기·키오스크·TV·디지털 메뉴보드 중 무엇인지 구분.",
-        "- 확실하지 않으면 uncertain=true. 보이지 않는 물건은 절대 추가하지 말 것. 가격·브랜드는 쓰지 말 것.",
+        "- 확실하지 않으면 uncertain=true. 보이지 않는 물건은 절대 추가하지 말 것. 가격은 쓰지 말 것.",
+        "- brand·model: 물건의 로고·명판·라벨 글자가 사진에서 직접 읽히는 경우에만 그 글자 그대로 적는다 (예: brand \"La Marzocco\", model \"Linea PB\"). 글자가 안 보이면 빈 문자열. 모양만 보고 추측하지 말 것.",
         f"- 품목 이름은 가능하면 다음 사전에서: {p['dictionary']}",
         "box_2d=[ymin,xmin,ymax,xmax] (0~1000 정규화). JSON 만:",
-        '{"items":[{"name":"...","category":"집기","box_2d":[0,0,0,0],"fixed":false,"uncertain":false}]}',
+        '{"items":[{"name":"...","category":"집기","box_2d":[0,0,0,0],"brand":"","model":"","fixed":false,"uncertain":false}]}',
     ])
     resp = _generate(
         model=_model(model), contents=[instruction, types.Part.from_bytes(data=buf.getvalue(), mime_type="image/jpeg")],
@@ -310,7 +311,8 @@ def detect_all(image, model: str | None = None) -> tuple[dict, dict]:
         if any(o["label"] == name and _overlap(box, o["box"]) > 0.7 for o in objs):
             continue  # 같은 물건을 두 번 그린 경우
         oid = len(objs)
-        objs.append({"id": oid, "label": name, "box": [round(v, 1) for v in box], "task": "GEMINI"})
+        objs.append({"id": oid, "label": name, "box": [round(v, 1) for v in box], "task": "GEMINI",
+                     "brand": str(it.get("brand") or "").strip(), "model": str(it.get("model") or "").strip()})
         g = groups.setdefault(name, {"ids": [], "cat": it.get("category", "집기"), "unc": False, "fixed": False})
         g["ids"].append(oid)
         g["unc"] |= bool(it.get("uncertain"))

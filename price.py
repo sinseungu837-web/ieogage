@@ -320,7 +320,9 @@ def estimate(name: str, manufacturer='', model='', spec='', condition='', *,
                           collected_at=selected.collected_at.max(),
                           evidence=selected.to_dict('records'),
                           confidence='높음' if brand and model and '동일 모델 근거 부족' not in match
-                          and selected.model.map(listings.token).eq(listings.token(model)).all() else '낮음')
+                          and selected.model.map(listings.token).eq(listings.token(model)).all()
+                          # 보통: 같은 제조사 매물만으로 계산 (모델 미확인 또는 사양 일치)
+                          else '보통' if brand and selected.manufacturer.eq(brand).all() else '낮음')
             if len(selected) >= MIN_SAMPLES:
                 q1, mid, q3 = selected.price.astype(float).quantile([.25, .5, .75])
                 result.update(low=int(q1), mid=int(mid), high=int(q3))
