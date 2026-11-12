@@ -327,7 +327,7 @@ def estimate(name: str, manufacturer='', model='', spec='', condition='', *,
                 data = exact
                 match = '동일 품목·제조사·모델' if brand else '동일 품목·모델 (제조사 미확인)'
             elif spec:
-                data = data[data.spec.map(listings.token) == listings.token(spec)]
+                data = data[data.spec.map(listings.spec_key) == listings.spec_key(spec)]
                 match = '동일 품목·동일 사양' + ('·제조사' if brand else '')
             else:
                 data = exact
@@ -336,7 +336,7 @@ def estimate(name: str, manufacturer='', model='', spec='', condition='', *,
             match = '동일 품목·제조사 참고 시세' if brand else '품목만 확인된 참고 시세'
         trace('model_or_spec_fallback', data)
         if spec:
-            data = data[data.spec.map(listings.token) == listings.token(spec)]
+            data = data[data.spec.map(listings.spec_key) == listings.spec_key(spec)]
             match += '·동일 사양'
             trace('spec', data)
         if not data.empty:
@@ -374,15 +374,23 @@ def estimate(name: str, manufacturer='', model='', spec='', condition='', *,
         try:
             import crawler
             live = listings.normalize(crawler.live_rows(listings.item(name)))
+            # 입력한 조건(제조사·모델·용량)이 제목에 모두 있는 매물만. 3건 미만이면 다른 제품으로 채우지 않는다.
+            if brand:
+                names = {listings.token(brand)} | {k for k, v in listings.MAKERS.items() if v == brand}
+                live = live[live.title.map(listings.token).map(lambda t: any(n in t for n in names))]
             if model:
-                same = live[live.title.map(listings.token).str.contains(listings.token(model), regex=False)]
-                live = same if len(same) >= MIN_SAMPLES else live.iloc[0:0]
+                live = live[live.title.map(listings.token).str.contains(listings.token(model), regex=False)]
+            if spec:
+                live = live[live.title.map(listings.spec_key).str.contains(listings.spec_key(spec), regex=False)]
+            if len(live) < MIN_SAMPLES:
+                live = live.iloc[0:0]
             vals = _drop_outliers(sorted(int(v) for v in live.price))
             if len(vals) >= MIN_SAMPLES:
                 q1, mid, q3 = statistics.quantiles(vals, n=4)
                 return {**result, 'low': int(q1), 'mid': int(statistics.median(vals)), 'high': int(q3),
                         'n': len(vals), 'price_basis': 'asking', 'confidence': '낮음',
-                        'match': ('동일 모델명 포함' if model else '품목만 확인된') + ' 실시간 검색',
+                        'match': ('동일 ' + '·'.join(k for k, v in (('제조사', brand), ('모델', model), ('사양', spec)) if v)
+                                  if (brand or model or spec) else '품목만 확인된') + ' 실시간 검색',
                         'source': f'판매 중 매물의 게시 가격 기준 참고 시세 · 헬로마켓 실시간 검색 {len(vals)}건',
                         'collected_at': listings.today().isoformat(),
                         'evidence': live[live.price.isin(vals)].to_dict('records')}
