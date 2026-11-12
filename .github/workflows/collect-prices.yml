@@ -20,6 +20,8 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install pandas python-dotenv
+      - name: 판매 중 매물 상태 재확인 (삭제·판매 완료·가격 변경)
+        run: python crawler.py refresh || true
       - name: 헬로마켓 수집
         run: python crawler.py hellomarket --limit 12 || true
       - name: 온비드 수집
@@ -32,9 +34,11 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: pip install google-genai && python crawler.py enrich || true
+      - name: 부족 현황표·사람 확인 목록 갱신
+        run: python crawler.py coverage && python crawler.py review-queue || true
       - name: 변경 시 커밋
         run: |
           git config user.name "price-collector-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add data/listings.csv data/price_table.csv data/new_prices.csv
+          git add data/listings.csv data/price_table.csv data/new_prices.csv data/coverage.csv data/status_log.csv data/review_queue.csv
           git diff --cached --quiet || (git commit -m "data: 가격 DB 자동 수집 $(date +%F)" && git push)

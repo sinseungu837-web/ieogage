@@ -1,0 +1,49 @@
+﻿checked_at,item,url,old_price,new_price,result
+2026-11-12,"<bound method IndexOpsMixin.item of item                                                   제빙기
+manufacturer                                           카이저
+model                                                     
+spec                                                      
+title                                          카이저 업소용 제빙기
+condition                                               중고
+price                                               595000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/184503309
+collected_at                                    2026-11-12
+is_sample                                            false
+Name: 3, dtype: object>",https://www.hellomarket.com/item/184503309,595000,595000,판매 중 확인
+2026-11-12,"<bound method IndexOpsMixin.item of item                                                   제빙기
+manufacturer                                            sk
+model                                                     
+spec                                                      
+title                                       SK제빙기 10만원에팝니다
+condition                                               중고
+price                                               100000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/181772865
+collected_at                                    2026-11-12
+is_sample                                            false
+Name: 4, dtype: object>",https://www.hellomarket.com/item/181772865,100000,100000,판매 중 확인
+2026-11-12,"<bound method IndexOpsMixin.item of item                                                   제빙기
+manufacturer                                           카이저
+model                                                     
+spec                                                 100kg
+title                                        카이저 100kg 제빙기
+condition                                               중고
+price                                               300000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/184019186
+collected_at                                    2026-11-12
+is_sample                                            false
+Name: 5, dtype: object>",https://www.hellomarket.com/item/184019186,300000,300000,판매 중 확인

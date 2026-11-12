@@ -9,6 +9,7 @@ import html as html_lib
 import json
 import re
 import time
+import urllib.error
 import urllib.request
 import urllib.robotparser
 from datetime import date
@@ -235,7 +236,10 @@ def discover_models(item, limit=4, name=HELLO, registry=SOURCES):
     config = source_for(name, registry)
     delay = max(2, float(config.get('delay_seconds', 2)))
     rows = []
+    enough = {key for key, n in _model_counts().items() if n >= TARGET_PER_MODEL}
     for maker, model, query, must in MODEL_QUERIES.get(item, []):
+        if (item, model) in enough:
+            continue  # 이미 충분한 모델은 건너뛰고 부족한 모델만 수집
         urls = []
         for card in search_cards(query, name, registry):
             low = card['title'].lower().replace(' ', '')
@@ -252,6 +256,171 @@ def discover_models(item, limit=4, name=HELLO, registry=SOURCES):
             r.update(manufacturer=maker, model=model, title=_clean_title(r['title']))
             rows.append(r)
     return rows
+
+
+TARGET_PER_MODEL = 5  # 모델별 목표 표본 수 (시세 계산 최소 3건 + 여유)
+
+
+def _has_word(title, words):
+    low = str(title).lower().replace(' ', '')
+    return any(w.lower().replace(' ', '') in low for w in words)
+
+
+def _model_counts(path=listings.LISTINGS):
+    """선정 모델별 최근 180일 판매 중 게시가 건수."""
+    frame = listings.production(listings.read(path))
+    counts = {}
+    for item, models in MODEL_QUERIES.items():
+        for maker, model, query, must in models:
+            sub_ = frame[(frame.item == item) & (frame.price_basis == 'asking')]
+            counts[(item, model)] = int(sub_.title.map(lambda t: _has_word(t, must)).sum()) if len(sub_) else 0
+    return counts
+
+
+COVERAGE = listings.BASE / 'coverage.csv'
+
+
+def coverage(path=listings.LISTINGS, out=COVERAGE):
+    """품목·제조사·선정 모델별 표본 수와 부족 여부. 가격 성격(게시가·낙찰가)은 섞지 않고 따로 센다."""
+    import pandas as pd
+    frame = listings.production(listings.read(path))
+    rows = []
+
+    def add(level, item, maker, model, sub_):
+        n = {b: int((sub_.price_basis == b).sum()) for b in ('asking', 'sold_posted', 'auction')}
+        rows.append({'단위': level, '품목': item, '제조사': maker, '모델': model, '판매중_게시가': n['asking'],
+                     '판매완료_게시가': n['sold_posted'], '공매_낙찰가': n['auction'],
+                     '시세계산': '가능' if max(n.values()) >= price_min() else '부족'})
+
+    for item in sorted(set(listings.ITEM_WORDS) | set(frame.item)):
+        sub_ = frame[frame.item == item]
+        add('품목', item, '', '', sub_)
+        for maker in sorted(m for m in sub_.manufacturer.unique() if m):
+            add('제조사', item, maker, '', sub_[sub_.manufacturer == maker])
+    for item, models in MODEL_QUERIES.items():
+        for maker, model, query, must in models:
+            sub_ = frame[frame.item == item]
+            add('선정모델', item, maker, model, sub_[sub_.title.map(lambda t: _has_word(t, must))] if len(sub_) else sub_)
+    table = pd.DataFrame(rows)
+    listings.atomic_csv(table, out)
+    return table
+
+
+def price_min():
+    import price
+    return price.MIN_SAMPLES
+
+
+STATUS_LOG = listings.BASE / 'status_log.csv'
+
+
+def refresh(path=listings.LISTINGS, name=HELLO, registry=SOURCES, log_path=STATUS_LOG, limit=None):
+    """판매 중 매물의 원문을 다시 열어 상태를 갱신한다.
+    삭제(404·410)·판매 중지 → DB에서 제외, 판매 완료 → '판매 완료 게시가'로 전환, 가격 변경 → 새 가격.
+    접속 실패 등 확인 못 한 경우는 그대로 두고 기록만 남긴다."""
+    import pandas as pd
+    config = source_for(name, registry)
+    origin = config['origin'].rstrip('/')
+    robot = _robot(origin)
+    delay = max(2, float(config.get('delay_seconds', 2)), robot.crawl_delay(USER_AGENT) or 0)
+    frame = listings.read(path)
+    targets = frame[(frame.source == name) & (frame.sale_status == 'for_sale')]
+    if limit:
+        targets = targets.head(limit)
+    drop, log, today = [], [], listings.today().isoformat()
+    for i, row in targets.iterrows():
+        if not robot.can_fetch(USER_AGENT, row.url):
+            continue
+        time.sleep(delay)
+        entry = {'checked_at': today, 'item': row.item, 'url': row.url, 'old_price': row.price, 'new_price': ''}
+        try:
+            page = fetch(row.url)
+        except urllib.error.HTTPError as exc:
+            if exc.code in (404, 410):
+                drop.append(i)
+                log.append(entry | {'result': '삭제됨 (DB 제외)'})
+            else:
+                log.append(entry | {'result': f'확인 실패 HTTP {exc.code} (유지)'})
+            continue
+        except Exception as exc:
+            log.append(entry | {'result': f'확인 실패 {type(exc).__name__} (유지)'})
+            continue
+        live = parse_products(page, row.url, name, row.item)
+        if live:
+            new = int(float(live[0]['price']))
+            if new != int(row.price):
+                frame.at[i, 'price'] = new
+                log.append(entry | {'new_price': new, 'result': '가격 변경'})
+            else:
+                log.append(entry | {'new_price': new, 'result': '판매 중 확인'})
+            frame.at[i, 'collected_at'] = today  # 마지막 확인일
+        elif re.search(r'schema\.org/(SoldOut|Sold)\b', page):
+            frame.at[i, 'sale_status'] = 'sold'
+            frame.at[i, 'price_basis'] = 'sold_posted'
+            log.append(entry | {'result': '판매 완료 (판매 완료 게시가로 전환)'})
+        else:
+            drop.append(i)
+            log.append(entry | {'result': '판매 중지·확인 불가 (DB 제외)'})
+    frame = frame.drop(index=drop)
+    listings.atomic_csv(frame, path)
+    listings.atomic_csv(listings.summary(frame), Path(path).with_name('price_table.csv'))
+    if log:
+        target = Path(log_path)
+        old = pd.read_csv(target, dtype=str, keep_default_na=False) if target.exists() else pd.DataFrame()
+        listings.atomic_csv(pd.concat([old, pd.DataFrame(log)], ignore_index=True), target)
+    return {'checked': len(targets), 'removed': len(drop),
+            'results': pd.Series([e['result'] for e in log]).value_counts().to_dict() if log else {}}
+
+
+REVIEW_QUEUE = listings.BASE / 'review_queue.csv'
+REVIEW_LOG = listings.BASE / 'review_log.csv'
+QUEUE_COLUMNS = ['url', 'item', 'title', 'manufacturer', 'model', 'spec', 'price', 'price_basis', 'source',
+                 '확인결과', '확인자', '메모']
+
+
+def review_queue(path=listings.LISTINGS, out=REVIEW_QUEUE, log_path=REVIEW_LOG):
+    """자동 수집·AI 추출 값 중 사람이 아직 원문과 대조하지 않은 매물 목록.
+    확인결과 칸에 일치 / 수정 / 제외 를 적고 apply-review 로 반영한다."""
+    import pandas as pd
+    frame = listings.read(path)
+    done = set()
+    if Path(log_path).exists():
+        done = set(pd.read_csv(log_path, dtype=str, keep_default_na=False).url)
+    todo = frame[~frame.url.isin(done) & ~frame.source.str.contains('수동 검증')]
+    queue = todo.assign(확인결과='', 확인자='', 메모='')[QUEUE_COLUMNS]
+    listings.atomic_csv(queue, out)
+    return len(queue)
+
+
+def apply_review(queue_path=REVIEW_QUEUE, path=listings.LISTINGS, log_path=REVIEW_LOG):
+    """사람이 원문과 대조한 결과 반영. 수정: 적은 제조사·모델·사양·가격으로 교체, 제외: DB에서 뺌."""
+    import pandas as pd
+    queue = pd.read_csv(queue_path, dtype=str, keep_default_na=False)
+    reviewed = queue[queue['확인결과'].isin(['일치', '수정', '제외'])]
+    if reviewed['확인자'].str.strip().eq('').any():
+        raise ValueError('확인자 이름이 필요합니다')
+    frame = listings.read(path).astype(str)  # 사람이 적은 값은 문자열로 받고 normalize 가 다시 검사
+    by_url = {u: i for i, u in frame.url.items()}
+    drop = []
+    for _, r in reviewed.iterrows():
+        i = by_url.get(r.url)
+        if i is None:
+            continue
+        if r['확인결과'] == '제외':
+            drop.append(i)
+        elif r['확인결과'] == '수정':
+            for col in ('manufacturer', 'model', 'spec', 'price'):
+                frame.at[i, col] = listings.maker(r[col]) if col == 'manufacturer' else r[col]
+    frame = listings.normalize(frame.drop(index=drop).to_dict('records'))
+    listings.atomic_csv(frame, path)
+    listings.atomic_csv(listings.summary(frame), Path(path).with_name('price_table.csv'))
+    log = reviewed.assign(확인일=listings.today().isoformat())
+    target = Path(log_path)
+    old = pd.read_csv(target, dtype=str, keep_default_na=False) if target.exists() else pd.DataFrame()
+    listings.atomic_csv(pd.concat([old, log], ignore_index=True), target)
+    review_queue(path, queue_path, log_path)
+    return {'reviewed': len(reviewed), 'removed': len(drop),
+            'edited': int((reviewed['확인결과'] == '수정').sum())}
 
 
 HANSUNG = '한성쇼케이스'
@@ -429,6 +598,11 @@ def main():
     imported = sub.add_parser('import-csv')
     imported.add_argument('file')
     imported.add_argument('--source', required=True)
+    sub.add_parser('coverage', help='품목·제조사·모델별 표본 수와 부족 여부 → data/coverage.csv')
+    fresh = sub.add_parser('refresh', help='판매 중 매물 원문 재확인 (삭제·판매 완료·가격 변경)')
+    fresh.add_argument('--limit', type=int)
+    sub.add_parser('review-queue', help='사람 확인이 필요한 매물 목록 → data/review_queue.csv')
+    sub.add_parser('apply-review', help='review_queue.csv 의 확인결과(일치/수정/제외) 반영')
     sub.add_parser('hansung', help='한성쇼케이스 신품 판매가 → data/new_prices.csv')
     manual = sub.add_parser('import-manual')
     manual.add_argument('file')
@@ -443,6 +617,18 @@ def main():
             from data_diagnostics import diagnose
             print(json.dumps(diagnose(args.file, name=args.item, manufacturer=args.manufacturer,
                 model=args.model, spec=args.spec, condition=args.condition), ensure_ascii=False, indent=2))
+            return 0
+        if args.command in ('coverage', 'refresh', 'review-queue', 'apply-review'):
+            if args.command == 'coverage':
+                table = coverage()
+                short = table[table['시세계산'] == '부족']
+                print(f'{len(table)}행 중 부족 {len(short)}행 → {COVERAGE.name}')
+            elif args.command == 'refresh':
+                print(json.dumps(refresh(limit=args.limit), ensure_ascii=False))
+            elif args.command == 'review-queue':
+                print(f'확인 대기 {review_queue()}건 → {REVIEW_QUEUE.name}')
+            else:
+                print(json.dumps(apply_review(), ensure_ascii=False))
             return 0
         if args.command == 'hansung':
             got = collect_hansung()
