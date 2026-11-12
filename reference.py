@@ -29,8 +29,9 @@ def _rows(path=PATH):
     with open(path, encoding='utf-8-sig') as f:
         rows = list(csv.DictReader(f))
     for r in rows:
-        for k in ('new_price', 'used_low', 'used_high'):
+        for k in ('used_low', 'used_high'):
             r[k] = int(r[k])
+        r['new_price'] = int(r['new_price']) if str(r.get('new_price', '')).strip() else None  # 신품가 미조사 행 허용
     return tuple(rows)
 
 
@@ -79,8 +80,8 @@ def match_model(item, maker, value):
     for r in candidates(item):
         if maker and r['manufacturer'] != maker:
             continue
-        b = _base_model(r['model'])
-        if b and (b in v or v in b):
+        names = {_base_model(r['model'])} | {listings.token(x) for x in re.findall(r'\((.*?)\)', r['model'])}  # '독스타 (DOCKSTA)' 영문도
+        if any(b and len(b) >= 2 and (b in v or v in b) for b in names):
             return r['model']
     return ''
 
@@ -119,7 +120,7 @@ def prompt_table():
     """Gemini 탐지 프롬프트용: 품목별 제조사·모델 후보."""
     lines = []
     for item in items():
-        cands = ' / '.join(f"{r['manufacturer']}{'(' + r['maker_alias'] + ')' if r['maker_alias'] else ''}: {r['model']}"
-                           for r in candidates(item))
+        cands = ' / '.join(dict.fromkeys(f"{r['manufacturer']}{'(' + r['maker_alias'] + ')' if r['maker_alias'] else ''}: {r['model']}"
+                                         for r in candidates(item)))  # 같은 모델 중복 행은 한 번만
         lines.append(f'- {item}: {cands}')
     return '\n'.join(lines)
