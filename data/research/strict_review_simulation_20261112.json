@@ -1,0 +1,78 @@
+{
+  "purpose": "엄격한 검증 기준을 적용한 조사 단계 시뮬레이션. 현재 운영 견적 필터가 아니며 PR 최종안에는 검증 정책 변경을 포함하지 않음.",
+  "raw_records": 99,
+  "normalized_records": 99,
+  "duplicate_urls": 0,
+  "missing_model": 52,
+  "missing_manufacturer": 33,
+  "verified_eligible": 5,
+  "pending_or_ineligible": 94,
+  "item_counts": {
+    "블렌더": 3,
+    "업소용 냉장고": 12,
+    "의자": 17,
+    "제빙기": 17,
+    "커피 그라인더": 7,
+    "커피머신": 9,
+    "테이블": 34
+  },
+  "source_counts": {
+    "소상공간 · 수동 검증 게시가": 7,
+    "소상공간 · 수동 상세 검증 게시가": 3,
+    "온비드 (물건관리번호 검색 링크)": 69,
+    "헬로마켓": 20
+  },
+  "verified_groups": [
+    {
+      "item": "블렌더",
+      "manufacturer": "바이타믹스",
+      "model": "콰이어트원",
+      "spec": "",
+      "condition": "중고",
+      "price_basis": "asking",
+      "verified_count": 2,
+      "minimum_target": 3,
+      "recommended_target": 5,
+      "minimum_gap": 1,
+      "recommended_gap": 3
+    },
+    {
+      "item": "블렌더",
+      "manufacturer": "바이타믹스",
+      "model": "콰이어트원",
+      "spec": "컨테이너 2개",
+      "condition": "중고",
+      "price_basis": "sold_posted",
+      "verified_count": 1,
+      "minimum_target": 3,
+      "recommended_target": 5,
+      "minimum_gap": 2,
+      "recommended_gap": 4
+    },
+    {
+      "item": "제빙기",
+      "manufacturer": "카이저",
+      "model": "IMK-3051",
+      "spec": "50kg",
+      "condition": "중고",
+      "price_basis": "asking",
+      "verified_count": 2,
+      "minimum_target": 3,
+      "recommended_target": 5,
+      "minimum_gap": 1,
+      "recommended_gap": 3
+    }
+  ],
+  "missing_priority_items": [
+    "업소용 냉동고",
+    "쇼케이스 냉장고",
+    "오븐",
+    "정수기",
+    "온수기",
+    "작업대",
+    "싱크대",
+    "포스기",
+    "키오스크"
+  ],
+  "caution": "게시가/낙찰가/판매 완료 게시가, 사양과 상태가 다른 그룹은 합산하지 않음. 최소 3건은 정확도 보장 아님."
+}
