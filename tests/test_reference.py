@@ -51,7 +51,7 @@ class DetectFilterTest(unittest.TestCase):
         det, result = self.run_detect([
             {'name': '에스프레소 머신', 'box_2d': [100, 100, 400, 400], 'brand': 'FAEMA', 'model': 'E98 UP 2그룹', 'brand_basis': '로고'},
             {'name': '의자', 'box_2d': [500, 100, 800, 200], 'brand': '톤', 'model': '체어 14 (No.14)', 'brand_basis': '형태 예측'},
-            {'name': '의자', 'box_2d': [500, 300, 800, 400], 'brand': '디자인가구', 'model': '라탄 인테리어 의자'},
+            {'name': '의자', 'box_2d': [500, 300, 800, 400], 'brand': 'Tolix', 'model': 'A Chair'},
             {'name': '화분', 'box_2d': [100, 600, 300, 700], 'brand': '', 'model': ''},
             {'name': '제빙기', 'box_2d': [600, 600, 900, 900], 'brand': '없는회사', 'model': 'X'},
         ])
@@ -60,7 +60,7 @@ class DetectFilterTest(unittest.TestCase):
         machine, chair1, chair2, ice = det['objects']
         self.assertEqual((machine['brand'], machine['model'], machine['brand_basis'], machine['spec']),
                          ('훼마', 'E98 UP 2그룹', '로고', '2그룹'))
-        self.assertEqual((chair1['brand'], chair2['brand']), ('톤', '디자인가구(일반)'))  # 다르게 생긴 의자 → 다른 제조사
+        self.assertEqual((chair1['brand'], chair2['brand']), ('톤', '톨릭스'))  # 다르게 생긴 의자 → 다른 제조사
         self.assertEqual((ice['brand'], ice['brand_basis']), ('', ''))  # 후보 밖 이름은 버림 → 사용자가 입력
 
 
