@@ -7,5 +7,15 @@
     "checked_at": "2026-11-12",
     "delay_seconds": 3,
     "permission_evidence": "robots.txt 'User-agent: * / Allow: /' (2026-11-12 확인). 이용약관(2023-02-23 시행)에 크롤링·자동 수집 금지 조항 없음. 제22조④는 회사에 지적재산권이 귀속된 정보의 영리 목적 복제만 금지 → 제목·가격·등록 시점·원문 링크만 저장하고 판매자 정보·이미지·설명은 저장하지 않음."
+  },
+  "한성쇼케이스": {
+    "enabled": true,
+    "automation_allowed": true,
+    "origin": "https://hansungshowcase.kr",
+    "terms_url": "https://hansungshowcase.kr/member/agreement.html",
+    "checked_at": "2026-11-12",
+    "delay_seconds": 3,
+    "price_kind": "new",
+    "permission_evidence": "robots.txt 'User-agent: *' 는 /admin, /api, /exec/front, /order, /basket 만 차단, 상품 목록 허용 (2026-11-12 확인). 이용약관(2020-01-01 시행)에 크롤링·자동 수집 금지 조항 없음. 제22조②는 '몰'에 지적재산권이 귀속된 정보의 사전 승낙 없는 영리 목적 복제만 금지 → 상품명·판매가·상품 링크(사실 정보)만 저장하고 사진·설명은 저장하지 않음. 신품 판매가이므로 중고 매물 DB와 분리(data/new_prices.csv)."
   }
 }

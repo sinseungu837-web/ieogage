@@ -229,6 +229,92 @@ def live_rows(item, max_age=180, name=HELLO):
     return rows
 
 
+# 브랜드·모델별 시세를 위한 모델명 검색어 (팀 조사 엑셀의 주요 모델 18종, 2026-11-12). 가격은 쓰지 않고 이름만 사용
+# 품목: [(제조사, 모델, 검색어, 제목에 있어야 할 단어들)]
+MODEL_QUERIES = {
+    '커피머신': [('라마르조코', '리네아 클래식', '라마르조꼬 리네아', ['리네아']), ('씨메', 'CO-05', '씨메 CO-05', ['씨메', 'co-05', 'co05']),
+                ('훼마', 'E98 UP', '훼마 E98', ['e98']), ('빅토리아 아두이노', '블랙이글', '블랙이글 머신', ['블랙이글']),
+                ('BFC', '몬자', 'BFC 몬자', ['몬자'])],
+    '커피 그라인더': [('말코닉', 'E65S', '말코닉 E65S', ['e65']), ('안핌', '스코디 II', '안핌 스코디', ['스코디']),
+                   ('메저', '슈퍼졸리', '메저 슈퍼졸리', ['슈퍼졸리', '졸리']), ('유레카', '헬리오스 65', '유레카 헬리오스', ['헬리오스'])],
+    '블렌더': [('바이타믹스', '콰이어트 원', '바이타믹스 콰이어트원', ['콰이어트']), ('블렌텍', '스텔스 895', '블렌텍 스텔스', ['스텔스']),
+             ('JTC', '옴니블렌드', '옴니블렌드', ['옴니블렌드'])],
+    '제빙기': [('호시자키', 'IM-45NE', '호시자키 제빙기', ['호시자키']), ('브레마', 'CB-425', '브레마 제빙기', ['브레마']),
+             ('카이저', 'IMK-3051', '카이저 제빙기', ['카이저'])],
+    '업소용 냉장고': [('우성', '1500', '우성 테이블냉장고', ['우성']), ('스타리온', '1500', '스타리온 테이블냉장고', ['스타리온']),
+                  ('터보에어', '1500', '터보에어 테이블냉장고', ['터보에어'])],
+}
+
+
+def discover_models(item, limit=4, name=HELLO, registry=SOURCES):
+    """모델명으로 검색해 제목에 모델 단어가 있는 매물만 제조사·모델을 채워 저장한다."""
+    config = source_for(name, registry)
+    delay = max(2, float(config.get('delay_seconds', 2)))
+    rows = []
+    for maker, model, query, must in MODEL_QUERIES.get(item, []):
+        urls = []
+        for card in search_cards(query, name, registry):
+            low = card['title'].lower().replace(' ', '')
+            if card['age_days'] is not None and card['age_days'] <= 180 and _usable(item, card['title']) \
+                    and any(w.lower().replace(' ', '') in low for w in must):
+                urls.append(card['url'])
+        time.sleep(delay)
+        for r in crawl(name, urls[:limit], item, registry):
+            low = r['title'].lower().replace(' ', '')
+            has_model = any(w.lower().replace(' ', '') in low for w in must)
+            has_item = any(listings.token(w) in listings.token(r['title']) for w in listings.ITEM_WORDS.get(item, [item]))
+            if not (has_model and has_item):
+                continue  # 열어 본 페이지 제목에 모델 단어와 품목 단어가 모두 있어야 함 (다른 상품·코드 우연 일치 방지)
+            r.update(manufacturer=maker, model=model, title=_clean_title(r['title']))
+            rows.append(r)
+    return rows
+
+
+HANSUNG = '한성쇼케이스'
+NEW_PRICES = listings.BASE / 'new_prices.csv'
+NEW_PRICE_COLUMNS = ['item', 'title', 'price', 'source', 'url', 'collected_at']
+
+
+def _hansung_item(title):
+    if re.search(r'정육|꽃|플라워|육류|수산|횟감', title):
+        return None  # 카페와 무관한 정육·꽃집용 쇼케이스 제외
+    if '냉동' in title:
+        return '업소용 냉동고'
+    if '쇼케이스' in title:
+        return '쇼케이스 냉장고'
+    return None
+
+
+def collect_hansung(name=HANSUNG, registry=SOURCES):
+    """한성쇼케이스 상품 목록의 상품명·판매가·링크만 신품가 파일에 저장 (사진·설명 저장 안 함)."""
+    import csv
+    import html as _html
+    config = source_for(name, registry)
+    page = fetch(config['origin'] + '/')
+    rows, seen = [], set()
+    for no, block in re.findall(r'<li[^>]+id="anchorBoxId_(\d+)"(.*?)(?=<li[^>]+id="anchorBoxId_|</ul>)', page, re.S):
+        text = _html.unescape(re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', ' ', block)))
+        m_name = re.search(r'상품명\s*:\s*(.+?)\s*판매가', text)
+        m_price = re.search(r'판매가\s*:\s*([0-9,]+)\s*원', text)
+        if not (m_name and m_price) or no in seen:
+            continue
+        title = PHONE.sub('', m_name.group(1)).strip()
+        item = _hansung_item(title)
+        price = int(m_price.group(1).replace(',', ''))
+        if not item or not (listings.MIN_PRICE if hasattr(listings, 'MIN_PRICE') else 1000) <= price <= 50_000_000:
+            continue
+        seen.add(no)
+        rows.append(dict(item=item, title=title, price=price, source=name,
+                         url=f"{config['origin']}/product/detail.html?product_no={no}",
+                         collected_at=listings.today().isoformat()))
+    if rows:
+        with open(NEW_PRICES, 'w', newline='', encoding='utf-8') as f:
+            w = csv.DictWriter(f, fieldnames=NEW_PRICE_COLUMNS)
+            w.writeheader()
+            w.writerows(rows)
+    return rows
+
+
 def discover(item, limit=12, name=HELLO, registry=SOURCES):
     """검색 → 매물 페이지(JSON-LD Product)를 열어 DB용 행을 만든다. 판매자 정보는 저장하지 않는다."""
     config = source_for(name, registry)
@@ -360,6 +446,7 @@ def main():
     imported = sub.add_parser('import-csv')
     imported.add_argument('file')
     imported.add_argument('--source', required=True)
+    sub.add_parser('hansung', help='한성쇼케이스 신품 판매가 → data/new_prices.csv')
     manual = sub.add_parser('import-manual')
     manual.add_argument('file')
     diagnose = sub.add_parser('diagnose')
@@ -373,6 +460,10 @@ def main():
             from data_diagnostics import diagnose
             print(json.dumps(diagnose(args.file, name=args.item, manufacturer=args.manufacturer,
                 model=args.model, spec=args.spec, condition=args.condition), ensure_ascii=False, indent=2))
+            return 0
+        if args.command == 'hansung':
+            got = collect_hansung()
+            print(f'한성쇼케이스 신품가 {len(got)}건 → {NEW_PRICES.name}')
             return 0
         if args.command == 'enrich':
             print(json.dumps(enrich_titles(), ensure_ascii=False))
@@ -398,8 +489,9 @@ def main():
             rows = []
             for name in ([args.item] if args.item else list(listings.ITEM_WORDS)):
                 got = discover(name, args.limit)
-                print(f'{name}: 매물 {len(got)}건 수집')
-                rows.extend(got)
+                got_models = discover_models(name)
+                print(f'{name}: 매물 {len(got)}건 + 모델 검색 {len(got_models)}건 수집')
+                rows.extend(got + got_models)
         else:
             config = source_for(args.source)
             rows = listings.read(args.file).to_dict('records')

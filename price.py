@@ -229,10 +229,32 @@ PPS_ITEMS = {"의자": "의자", "스툴": "의자", "테이블": "테이블", "
 DEPRECIATION = (0.2, 0.3, 0.5)
 
 
+def vendor_new_price_estimate(name: str) -> dict:
+    """업체 신품 판매가(data/new_prices.csv, 등록 출처) 중앙값 × 잔존율. 조달청에 없는 쇼케이스·냉동고용."""
+    import csv
+    from pathlib import Path
+    path = Path(__file__).parent / "data" / "new_prices.csv"
+    if not path.exists():
+        return empty_estimate(name)
+    with open(path, encoding="utf-8") as f:
+        rows = [r for r in csv.DictReader(f) if r.get("item") == name and str(r.get("price", "")).isdigit()]
+    vals = _drop_outliers(sorted(int(r["price"]) for r in rows))
+    if len(vals) < MIN_SAMPLES:
+        return empty_estimate(name, n=len(vals))
+    med = statistics.median(vals)
+    lo, mi, hi = DEPRECIATION
+    src = rows[0]["source"]
+    return {**empty_estimate(name), "low": int(med * lo), "mid": int(med * mi), "high": int(med * hi), "n": len(vals),
+            "source": f"신품가 기준 추정 · {src} 신품 판매가 {len(vals)}건 중앙값 {int(med):,}원 × 잔존율 20~50%",
+            "match": "품목 신품가 × 감가 (연식 미확인)", "confidence": "낮음", "price_basis": "new_depreciated",
+            "collected_at": rows[0]["collected_at"],
+            "evidence": [{"title": r["title"], "price": int(r["price"]), "source": r["source"], "url": r["url"]} for r in rows[:20]]}
+
+
 def new_price_estimate(name: str) -> dict:
     key, word = _key(), PPS_ITEMS.get(name)
     if not key or not word:
-        return empty_estimate(name)
+        return vendor_new_price_estimate(name)
     end = date.today()
     params = {"serviceKey": key, "type": "json", "pageNo": 1, "numOfRows": 100, "inqryDiv": "1",
               "inqryBgnDt": (end - timedelta(days=3 * 365)).strftime("%Y%m%d0000"),
