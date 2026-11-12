@@ -414,18 +414,29 @@ def photo_page():
         if file.size > MAX_UPLOAD_MB * 1024 * 1024:
             st.error(f'{MAX_UPLOAD_MB}MB 이하 사진만 올릴 수 있습니다.')
         else:
-            try:
-                image = vision.prepare(Image.open(file))
-            except Exception:
-                st.error('사진을 읽을 수 없습니다. JPG 또는 PNG 사진을 다시 선택해 주세요.')
-            else:
-                st.session_state.photo_draft = {'image': image}
+            # 새 파일일 때만 다시 읽는다 (같은 파일이면 사용자가 돌린 사진을 유지)
+            file_id = getattr(file, 'file_id', None) or f'{file.name}:{file.size}'
+            if st.session_state.get('photo_draft', {}).get('file_id') != file_id:
+                try:
+                    image = vision.prepare(Image.open(file))
+                except Exception:
+                    st.error('사진을 읽을 수 없습니다. JPG 또는 PNG 사진을 다시 선택해 주세요.')
+                else:
+                    st.session_state.photo_draft = {'image': image, 'file_id': file_id}
     if 'photo_draft' not in st.session_state and st.session_state.get('last'):
         st.session_state.photo_draft = {'image': st.session_state.last['image']}
     draft = st.session_state.get('photo_draft')
     if draft:
         image = draft['image']
         st.image(image, caption='분석할 사진', use_container_width=True)
+        st.caption('사진이 옆으로 누웠거나 뒤집혀 있으면 똑바로 돌린 뒤 분석하세요.')
+        rot_left, rot_right = st.columns(2)
+        if rot_left.button('↺ 왼쪽으로 90° 돌리기', use_container_width=True):
+            draft['image'] = image.rotate(90, expand=True)
+            st.rerun()
+        if rot_right.button('↻ 오른쪽으로 90° 돌리기', use_container_width=True):
+            draft['image'] = image.rotate(-90, expand=True)
+            st.rerun()
         import hashlib
         key = hashlib.md5(image.tobytes()).hexdigest()
         already = st.session_state.get('last', {}).get('key') == key
