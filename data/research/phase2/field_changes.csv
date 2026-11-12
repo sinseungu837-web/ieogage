@@ -12,3 +12,5 @@
 56,https://www.hellomarket.com/item/184874660,spec,,가로230×세로65×높이85(단위 미기재),https://www.hellomarket.com/item/184874660,200,가로 230 세로65 높이85,단위가 없으므로 cm/mm 환산하지 않음,2026-11-12,72
 66,https://www.hellomarket.com/item/185186680,spec,,호퍼120g·소비전력110W,https://www.hellomarket.com/item/185186680,200,원두용량 – 120g,본문에 명시된 호퍼 용량과 전력만 보완,2026-11-12,109
 80,https://www.sosangspace.com/products/c95b6d82-a995-428c-b8d9-51c76fe5c68d,spec,30kg,확인불가: 제목30kg / 본문35kg,https://www.sosangspace.com/products/c95b6d82-a995-428c-b8d9-51c76fe5c68d,200,소형제빙기35kg,제목 30kg와 본문 35kg 충돌. 임의 확정하지 않음,2026-11-12,123
+55,https://www.hellomarket.com/item/184882181,condition,중고,신품,https://www.hellomarket.com/item/184882181,200,새제품인데 테스트 1번 했습니다,JSON-LD UsedCondition과 본문 충돌. 정상 중고로 인증하지 않고 판매자 명시 상태를 기록,2026-11-12,46
+9,https://www.hellomarket.com/item/184797340,title,유니크 업소용 테이블냉동 냉장,유니크 업소용 테이블냉동 냉장 (테이블형 냉장고),https://www.hellomarket.com/item/184797340,200,냉동 냉장 반반입니다,원문 축약명 냉장을 분류상 냉장고로 보완. 원본명은 before 파일/이 로그에 보존; 모델 추정 아님,2026-11-12,90
