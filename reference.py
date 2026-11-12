@@ -24,8 +24,10 @@ ALIAS = {'커피머신': '에스프레소 머신', '커피 머신': '에스프�
          '천장형 에어컨': '에어컨', '냉난방기': '에어컨', '스피커/음향': '스피커'}
 
 
-@lru_cache(maxsize=1)
-def _rows(path=PATH):
+@lru_cache(maxsize=4)
+def _rows(path, mtime_ns):
+    """mtime 이 캐시 키 → CSV 가 바뀌면 다시 읽음 (서버가 켜진 채 git pull 로 표만 바뀌어도 반영).
+    2026-11-13 버그: 예전엔 처음 1회만 읽어, 배포 후에도 지운 '디자인가구(일반)' 행이 계속 쓰였음."""
     with open(path, encoding='utf-8-sig') as f:
         rows = list(csv.DictReader(f))
     for r in rows:
@@ -36,7 +38,7 @@ def _rows(path=PATH):
 
 
 def rows():
-    return list(_rows())
+    return list(_rows(PATH, PATH.stat().st_mtime_ns))
 
 
 def item_key(name):
