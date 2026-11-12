@@ -196,8 +196,12 @@ def analyze_photo(image, key):
             try:
                 det, result = llm.detect_all(image)
             except Exception as e:
-                st.error("AI 분석 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.")
-                st.caption(type(e).__name__)
+                code = getattr(e, "code", None)
+                if code in (429, 500, 503, 504) or "Timeout" in type(e).__name__:
+                    st.error("AI 서버가 일시적으로 혼잡합니다 (Google Gemini 과부하). 1~2분 뒤 다시 'AI 분석하기'를 눌러 주세요.")
+                else:
+                    st.error("AI 분석 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.")
+                st.caption(f"{type(e).__name__} {code or ''}")
                 st.stop()
         T["Gemini 탐지"] = _t.time() - _s
         det["timing"] = {k: round(v, 1) for k, v in T.items()}

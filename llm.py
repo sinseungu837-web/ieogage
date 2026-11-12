@@ -68,13 +68,17 @@ def _client():
 
 
 def _generate(**kw):
-    """Gemini 호출. 과부하(503)·사용량 초과(429)·시간 초과는 기본 모델 1회 재시도 후 대체 모델 1회."""
+    """Gemini 호출. 과부하(503)·사용량 초과(429)·시간 초과면 기본 모델 재시도 → 대체 모델 전부 → 기본 모델 마지막 1회.
+    (2026-11-13 기본 모델이 간헐적 503: 같은 시각 gemini-3.5-flash-lite 는 정상 응답 확인)"""
     import time
     from google.genai import errors
     first = kw.pop("model")
-    plan = [first, first] + [m for m in FALLBACK_MODELS if m != first][:1]
+    plan = [first, first] + [m for m in FALLBACK_MODELS if m != first] + [first]
+    waits = [1, 1, 2, 2, 3]
     last = None
     for n, m in enumerate(plan):
+        if n:
+            time.sleep(waits[min(n - 1, len(waits) - 1)])
         try:
             return _client().models.generate_content(model=m, **kw)
         except (errors.ServerError, errors.ClientError) as e:
@@ -83,11 +87,9 @@ def _generate(**kw):
             last = e
         except Exception as e:  # 시간 초과 등 네트워크 오류
             last = e
-        if n == 0:
-            time.sleep(1)
     raise last
 
-FALLBACK_MODELS = ["gemini-flash-lite-latest", "gemini-3.5-flash-lite"]
+FALLBACK_MODELS = ["gemini-3.5-flash-lite", "gemini-flash-lite-latest"]  # 실측으로 응답이 더 안정적인 순서
 
 def _model(model):
     return model or os.environ.get("GEMINI_MODEL", DEFAULT_MODEL)
@@ -292,6 +294,8 @@ def detect_all(image, model: str | None = None) -> tuple[dict, dict]:
         "- 확실하지 않으면 uncertain=true. 보이지 않는 물건은 절대 추가하지 말 것. 가격은 쓰지 말 것.",
     ] + ([
         "- [중요] 아래 [시세표] 에 있는 품목만 찾는다. 표에 없는 물건(컵·조명·화분·장식·재고 등)은 출력하지 않는다. name 은 표의 품목 이름 그대로.",
+        "- 카운터 안쪽·뒤쪽 장비도 빠짐없이 찾는다. 위에 원두가 담긴 투명 통(호퍼)이 달린 기계는 \"커피 그라인더\" (여러 대면 각각 박스).",
+        "- 사진이 여러 장 이어 붙여진 경우 각 칸을 모두 살펴본다.",
         "- brand: 그 품목의 후보 제조사 중 하나를 반드시 고른다. 로고·명판 글자가 보이면 그 제조사, 안 보이면 모양·색·크기·디테일이 가장 비슷한 후보를 예측한다.",
         "- 같은 품목의 박스끼리 모양·색·로고 특징이 같으면 같은 brand, 눈에 띄게 다르면 서로 다른 brand 를 고른다 (예: 의자 6개 중 4개와 2개가 다르게 생겼으면 두 제조사로 나눔).",
         "- model: 고른 제조사의 후보 모델명을 그대로 적는다. brand_basis: 로고·글자가 읽혔으면 \"로고\", 아니면 \"형태 예측\".",
