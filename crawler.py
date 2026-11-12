@@ -200,16 +200,32 @@ def search_cards(query, name=HELLO, registry=SOURCES):
 
 
 def live_rows(item, max_age=180, name=HELLO):
-    """서비스 요청 중 실시간 보완용. 검색 결과 카드만 사용 (품목당 요청 1~2회)."""
+    """검색 카드는 후보용. 상세의 중고·판매중·정상작동 주장 확인 후에만 반환."""
     rows = []
+    seen = set()
     for query in SEARCH_QUERIES.get(item, [item]):
         for card in search_cards(query, name):
             if card['age_days'] is None or card['age_days'] > max_age or not _usable(item, card['title']):
                 continue
-            rows.append(dict(item=item, manufacturer='', model='', spec='', title=card['title'], condition='중고',
-                             price=card['price'], currency='KRW', sale_status='for_sale', price_basis='asking',
-                             quantity=1, source=name + ' (실시간 검색)', url=card['url'],
-                             collected_at=listings.today().isoformat(), is_sample='false'))
+            if card['url'] in seen or len(seen) >= 6:
+                continue
+            seen.add(card['url'])
+            config = source_for(name)
+            robot = _robot(config['origin'])
+            if not robot.can_fetch(USER_AGENT, card['url']):
+                continue
+            time.sleep(max(3, float(config.get('delay_seconds', 3))))
+            page = fetch(card['url'])
+            parser = ProductParser(); parser.feed(page)
+            normal = any(re.search(r'정상|작동.{0,8}잘|점검.{0,8}완료',
+                str(p.get('description', ''))) for d in parser.documents for p in products(d))
+            if not normal:
+                continue
+            for row in parse_products(page, card['url'], name, item):
+                row['manufacturer'] = ''  # 판매자 닉네임을 제조사로 사용하지 않음
+                row['title'] = _clean_title(row['title'])
+                row['_detail_verified'] = True
+                rows.append(row)
     return rows
 
 
@@ -266,7 +282,8 @@ def enrich_titles(path=listings.LISTINGS, batch=40):
                 frame.at[i, col] = listings.maker(value) if col == 'manufacturer' else value
                 filled += 1
     listings.atomic_csv(frame, path)
-    listings.atomic_csv(listings.summary(frame), listings.BASE / 'price_table.csv')
+    from price_quality import LEDGER
+    listings.atomic_csv(listings.summary(frame, LEDGER), listings.BASE / 'price_table.csv')
     return {'rows_checked': len(todo), 'fields_filled': filled}
 
 
@@ -276,7 +293,7 @@ def collect_onbid(diagnostics=None):
         raise MissingAPIKey('MISSING_API_KEY: DATA_GO_KR_KEY')
     rows = []
     for name in listings.ITEM_WORDS:
-        for record in price.evidence(name, diagnostics=diagnostics):
+        for record in price.evidence(name, diagnostics=diagnostics, strict=True):
             # 물건관리번호가 없는 API 기록은 안정적인 원본 식별 불가.
             if not record['물건관리번호']:
                 continue
@@ -396,6 +413,14 @@ def main():
         print('MISSING_API_KEY: DATA_GO_KR_KEY 미설정 · API 미조회 (매물 부족과 다름) · 기존 DB 유지')
         return 1
     except Exception as exc:
+        from onbid_api import OnbidError
+        if isinstance(exc, OnbidError):
+            summary = {'status': 'API_REQUEST_FAILED', 'category': exc.category,
+                       'http_status': exc.http_status, 'api_code': exc.api_code}
+            if getattr(args, 'report', None):
+                Path(args.report).write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
+            print(json.dumps(summary, ensure_ascii=False))
+            return 1
         # API 오류 메시지는 키가 포함된 URL을 담을 수 있어 원문을 출력하지 않는다.
         print(f'수집 실패 ({type(exc).__name__}) · 기존 DB 유지. 출처 정책/설정/키를 확인하세요.')
         return 1

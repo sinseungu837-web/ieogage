@@ -10,10 +10,12 @@ def detect(*args):
             'seconds': 0, 'truncated': False}
 
 sys.modules['vision'] = types.SimpleNamespace(
-    DETECTOR='rfdetr', prepare=lambda image: image.convert('RGB'), load_model=lambda: (None, None),
+    DETECTOR='gemini', prepare=lambda image: image.convert('RGB'), load_model=lambda: (None, None),
     detect=detect, code_filter=lambda objects, size: (objects, []))
 sys.modules['llm'] = types.SimpleNamespace(
     get_api_key=lambda: 'test',
+    detect_all=lambda image: (detect(), {'items': [{'name': '의자', 'count': 1, 'source_ids': [1],
+        'category': '집기', 'in_dictionary': True, 'uncertain': False}], 'excluded': []}),
     classify_items=lambda objects: {'items': [{'name': '의자', 'count': 1, 'source_ids': [1],
                                              'category': '집기', 'in_dictionary': True, 'uncertain': False}], 'excluded': []},
     find_missing=lambda *args: ([], []), verify_ambiguous=lambda image, objects, result: result)

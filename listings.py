@@ -149,8 +149,11 @@ def production(frame, max_age=180):
     return frame[(frame.is_sample == 'false') & (frame.collected_at >= cutoff)]
 
 
-def summary(frame):
+def summary(frame, verification_path=None):
     rows = []
+    if verification_path is not None:
+        from price_quality import eligible
+        frame = eligible(frame, verification_path)
     # 출처·가격 성격을 분리. 상세 매칭은 price.py에서 매물 원본으로 수행한다.
     for keys, group in production(frame).groupby(['item', 'manufacturer', 'model', 'spec', 'condition', 'source', 'price_basis']):
         name, brand, model, spec, cond, source, basis = keys
@@ -180,5 +183,7 @@ def save(rows, path=LISTINGS, table_path=BASE / 'price_table.csv'):
         return 0  # 실패/빈 응답이면 기존 파일을 건드리지 않는다.
     combined = normalize(old.to_dict('records') + new.to_dict('records'))
     atomic_csv(combined, path)
-    atomic_csv(summary(combined), table_path)
+    from price_quality import LEDGER
+    verification_path = LEDGER if Path(path).resolve() == LISTINGS.resolve() else None
+    atomic_csv(summary(combined, verification_path), table_path)
     return len(new)

@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import streamlit as st
 from PIL import Image
 import listings
+import price_quality
 
 sys.modules['llm'] = types.SimpleNamespace(get_api_key=lambda: 'test')
 sys.modules['vision'] = types.SimpleNamespace(DETECTOR='gemini')
@@ -27,10 +28,17 @@ def fixture_db():
                 source='합성 데이터 · 테스트 전용', url=f'https://example.org/{model}/{i}',
                 collected_at=date.today().isoformat(), is_sample='false'))
     # production() 경로 검증을 위한 테스트 전용 스냅샷. 운영 파일에 쓰지 않는다.
-    listings.atomic_csv(listings.normalize(rows), path)
+    frame = listings.normalize(rows)
+    listings.atomic_csv(frame, path)
+    import pandas as pd
+    checks = [dict(url=r['url'], snapshot_sha256=price_quality.fingerprint(r), status='verified',
+        checked_at=listings.today().isoformat(), availability='available', working_status='tested',
+        published_at='', verification_note='격리 브라우저 합성 테스트 전용') for r in frame.to_dict('records')]
+    listings.atomic_csv(pd.DataFrame(checks, columns=price_quality.COLUMNS), Path(tmp.name)/'checks.csv')
     return tmp, path
 
 _tmp, listings.LISTINGS = fixture_db()
+price_quality.LEDGER = listings.LISTINGS.with_name('checks.csv')
 st.warning('브라우저 검증용 합성 데이터입니다. 실제 시세가 아닙니다.')
 if 'last' not in st.session_state:
     st.session_state.last = {'key': 'synthetic-price-test', 'image': Image.new('RGB', (1000, 600), '#ddd'),

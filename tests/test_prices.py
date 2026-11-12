@@ -64,7 +64,7 @@ class PriceTest(unittest.TestCase):
     def test_known_model_does_not_fall_back_to_other_models(self):
         self.write([record(i, model='Other') for i in range(4)])
         self.assertIsNone(self.estimate()['mid'])
-        self.assertIsNotNone(self.estimate(spec='2그룹')['mid'])
+        self.assertIsNone(self.estimate(spec='2그룹')['mid'])  # 같은 용량이어도 다른 모델로 대체하지 않음
         self.assertIsNone(self.estimate(spec='3그룹')['mid'])
 
     def test_exact_model_small_sample_not_broadened(self):
