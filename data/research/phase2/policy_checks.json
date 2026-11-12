@@ -1,0 +1,38 @@
+[
+  {
+    "url": "https://www.royalsalon.kr/robots.txt",
+    "http_status": 403
+  },
+  {
+    "url": "https://www.royalsalon.kr/?mode=policy",
+    "http_status": 403
+  },
+  {
+    "url": "https://thecbmstudio.com/robots.txt",
+    "http_status": 200,
+    "bytes": 323
+  },
+  {
+    "url": "https://thecbmstudio.com/terms",
+    "http_status": 404
+  },
+  {
+    "url": "https://www.hellomarket.com/robots.txt",
+    "http_status": 200,
+    "bytes": 266
+  },
+  {
+    "url": "https://www.hellomarket.com/terms.hm",
+    "http_status": 500
+  },
+  {
+    "url": "https://www.sosangspace.com/robots.txt",
+    "http_status": 200,
+    "bytes": 974
+  },
+  {
+    "url": "https://cafedirectmall.com/robots.txt",
+    "http_status": 200,
+    "bytes": 1276
+  }
+]

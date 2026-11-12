@@ -1,0 +1,8 @@
+﻿url,previous_reason,http_status,additional_information,normal_used_confirmed,can_add_to_db,decision,checked_at
+https://www.sosangspace.com/products/7b32bd83-7e64-4961-b700-bec30d6f79bd,생산량 120kg·저장 55kg 구분. 정상 작동에 관한 개별 장비 확인 부족.,200,"가격·모델·판매중은 재확인, 개별 정상작동/구성품의 추가 확정 근거 없음",false,false,pending,2026-11-12
+https://www.sosangspace.com/products/4f921ebc-a6cf-4922-98eb-322e34f20028,중고·판매중·가격 확인. 양호한 상태라는 설명만으로 정상 작동을 확정하지 않음.,200,"가격·모델·판매중은 재확인, 개별 정상작동/구성품의 추가 확정 근거 없음",false,false,pending,2026-11-12
+https://www.sosangspace.com/products/2ddc2110-b53b-4fdb-b377-67927a986ae4,본문 모델 코드 XEF T-04HS-ELDP-K 공백만 정규화. 현재 작동·부속 포함 판매 단위 추가 확인 필요.,200,"가격·모델·판매중은 재확인, 개별 정상작동/구성품의 추가 확정 근거 없음",false,false,pending,2026-11-12
+https://www.sosangspace.com/products/c12ff21e-b142-4b7c-b6ad-f95357cf4a79,가격·모델·판매중 확인. 개별 정상작동 주장 부족.,200,"가격·모델·판매중은 재확인, 개별 정상작동/구성품의 추가 확정 근거 없음",false,false,pending,2026-11-12
+https://cafedirectmall.com/product/detail.html?product_no=124,"상세 가격 확인. 구매/품절 버튼 모두 displaynone, 현재 판매 상태 불명확. 동일 판매처 유사 페이지 중복 재고 가능. 운영 제외.",200,HTML HTTP 200; 구매/품절 모두 숨김 상태 지속. Chromium 추가 확인은 ERR_CERT_AUTHORITY_INVALID로 실패,false,false,pending,2026-11-12
+https://cafedirectmall.com/product/detail.html?product_no=208,"상세 가격 확인. 구매/품절 버튼 모두 displaynone, 현재 판매 상태 불명확. 동일 판매처 유사 페이지 중복 재고 가능. 운영 제외.",200,HTML HTTP 200; 구매/품절 모두 숨김 상태 지속. Chromium 추가 확인은 ERR_CERT_AUTHORITY_INVALID로 실패,false,false,pending,2026-11-12
+https://cafedirectmall.com/product/detail.html?product_no=229,"상세 가격 확인. 구매/품절 버튼 모두 displaynone, 현재 판매 상태 불명확. 동일 판매처 유사 페이지 중복 재고 가능. 운영 제외.",200,HTML HTTP 200; 구매/품절 모두 숨김 상태 지속. Chromium 추가 확인은 ERR_CERT_AUTHORITY_INVALID로 실패,false,false,pending,2026-11-12
