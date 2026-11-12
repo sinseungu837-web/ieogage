@@ -66,3 +66,20 @@ class DetectFilterTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class ReloadTest(unittest.TestCase):
+    def test_table_change_is_picked_up(self):
+        import os, shutil, tempfile, time
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / 'ref.csv'
+            shutil.copy(reference.PATH, path)
+            with patch.object(reference, 'PATH', path):
+                self.assertTrue(any(r['manufacturer'] == '톤' for r in reference.rows()))
+                text = path.read_text(encoding='utf-8-sig').replace('톤,', '바뀐회사,')
+                path.write_text(text, encoding='utf-8-sig')
+                os.utime(path, ns=(time.time_ns() + 10**9,) * 2)
+                makers = {r['manufacturer'] for r in reference.rows()}
+                self.assertIn('바뀐회사', makers)
+                self.assertNotIn('톤', makers)

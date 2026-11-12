@@ -311,7 +311,7 @@ def detect_all(image, model: str | None = None) -> tuple[dict, dict]:
     ]))
     resp = _generate(
         model=_model(model), contents=[instruction, types.Part.from_bytes(data=buf.getvalue(), mime_type="image/jpeg")],
-        config=types.GenerateContentConfig(temperature=0.1, response_mime_type="application/json"),
+        config=types.GenerateContentConfig(temperature=0, response_mime_type="application/json"),
     )
     out = json.loads(resp.text)
     if isinstance(out, list):
