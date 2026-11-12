@@ -26,6 +26,8 @@ jobs:
         env:
           DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}
         run: python crawler.py onbid || true
+      - name: 한성쇼케이스 신품가 수집
+        run: python crawler.py hansung || true
       - name: 제목에서 제조사·모델 추출
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -34,5 +36,5 @@ jobs:
         run: |
           git config user.name "price-collector-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add data/listings.csv data/price_table.csv
+          git add data/listings.csv data/price_table.csv data/new_prices.csv
           git diff --cached --quiet || (git commit -m "data: 가격 DB 자동 수집 $(date +%F)" && git push)
