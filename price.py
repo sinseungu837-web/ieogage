@@ -341,10 +341,16 @@ def estimate(name: str, manufacturer='', model='', spec='', condition='', *,
             trace('spec', data)
         if not data.empty:
             # 서로 다른 가격 성격을 섞지 않음. 충분한 게시 가격 우선, 없으면 가장 많은 군집.
-            cohorts = [(basis, data[data.price_basis == basis])
-                       for basis in ('asking', 'sold_posted', 'auction')]
+            cohorts = []
+            for basis in ('asking', 'sold_posted', 'auction'):
+                groups = [g for _, g in data[data.price_basis == basis].groupby(
+                    data[data.price_basis == basis].spec.map(listings.spec_key))]
+                groups.sort(key=lambda g: (-len(g), not bool(g.spec.iloc[0])))
+                cohorts.extend((basis, g) for g in groups)
             sufficient = [(b, g) for b, g in cohorts if len(g) >= MIN_SAMPLES]
             basis, selected = sufficient[0] if sufficient else max(cohorts, key=lambda pair: len(pair[1]))
+            if not spec:
+                match += ' · ' + ('동일 사양군: ' + selected.spec.iloc[0] if selected.spec.iloc[0] else '사양 미확인군')
             trace('price_basis_' + basis, selected)
             label = {'asking': '판매 중 매물의 게시 가격 기준 참고 시세',
                      'sold_posted': '판매 완료 매물의 게시 가격 (실제 거래액 미확인)',
@@ -353,10 +359,10 @@ def estimate(name: str, manufacturer='', model='', spec='', condition='', *,
                           source=label + ' · ' + ', '.join(sorted(selected.source.unique())),
                           collected_at=selected.collected_at.max(),
                           evidence=selected.to_dict('records'),
-                          confidence='높음' if brand and model and '동일 모델 근거 부족' not in match
+                          confidence='높음' if brand and model and selected.spec.ne('').all() and '동일 모델 근거 부족' not in match
                           and selected.model.map(listings.token).eq(listings.token(model)).all()
                           # 보통: 같은 제조사 매물만으로 계산 (모델 미확인 또는 사양 일치)
-                          else '보통' if brand and selected.manufacturer.eq(brand).all() else '낮음')
+                          else '보통' if brand and selected.spec.ne('').all() and selected.manufacturer.eq(brand).all() else '낮음')
             if len(selected) >= MIN_SAMPLES:
                 q1, mid, q3 = selected.price.astype(float).quantile([.25, .5, .75])
                 result.update(low=int(q1), mid=int(mid), high=int(q3))
