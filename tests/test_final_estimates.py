@@ -54,6 +54,12 @@ class SafeEstimateTest(unittest.TestCase):
 
 
 class FinalPageTest(unittest.TestCase):
+    def setUp(self):
+        # 기존 매물 DB 경로 검증 (팀 조사 시세표 모드는 tests/test_reference.py)
+        patcher = patch.object(price, 'REFERENCE_ONLY', False)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def render(self):
         from streamlit.testing.v1 import AppTest
         import streamlit as st

@@ -36,7 +36,9 @@ def normalize_estimate(name, result):
         normalized['evidence'] = [row for row in evidence if isinstance(row, dict)]
     values = [result.get(key) for key in ('low', 'mid', 'high')]
     if any(value is not None for value in values):
-        if normalized['n'] < 3 or not all(isinstance(value, Real) and not isinstance(value, bool)
+        # 팀 조사 시세표는 모델별 범위값 1행도 근거로 인정 (개별 매물 3건 기준은 매물 DB에만 적용)
+        min_n = 1 if normalized['price_basis'] == 'reference' else 3
+        if normalized['n'] < min_n or not all(isinstance(value, Real) and not isinstance(value, bool)
                 and math.isfinite(value) and value > 0 for value in values):
             raise ValueError('유효 가격 또는 표본 부족')
         if not values[0] <= values[1] <= values[2]:
