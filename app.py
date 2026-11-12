@@ -296,22 +296,6 @@ def edit_page(last):
                 st.session_state[f"edit_box_{last['key']}"] = selected
                 st.rerun()
 
-    # [실험용] 단계별 시간 + 모델별 최종 탐지 문구 (나중에 지울 것)
-    from collections import Counter as _C
-    _t = last["det"].get("timing", {})
-    _rf = [o for o in last["kept"] if o.get("task") != "GEMINI"]
-    _gm = [o for o in objects if o.get("task") == "GEMINI"]
-    _ver = last["result"].get("verified", [])
-    _fmt = lambda c: ", ".join(f"{k} {v}" for k, v in c.most_common()) or "없음"
-    st.markdown(
-        "**[실험] 단계별 시간**: " + (" · ".join(f"{k} {v}초" for k, v in _t.items()) or "기록 없음")
-        + f"  \n**[실험] RF-DETR 최종 (코드 필터 후 {len(_rf)}개)**: " + _fmt(_C(o["label"] for o in _rf))
-        + "  \n**[실험] 탐지 박스의 최종 이름 (Gemini 1 + 3)**: "
-        + _fmt(_C(box_names.get(o["id"], "제외") for o in _rf))
-        + f"  \n**[실험] Gemini 2 추가 탐지 ({len(_gm)}개)**: " + _fmt(_C(o["label"] for o in _gm))
-        + f"  \n**[실험] Gemini 3 재확인 ({len(_ver)}개)**: "
-        + (", ".join(f"{v['before']}→{v['after']}" for v in _ver) or "없음")
-    )
 
     rows = inventory_rows(last)
     st.caption(f"현재 집기 {len(rows)}종 · 총 {len(box_names)}개 박스")
