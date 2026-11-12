@@ -142,10 +142,11 @@ HELLO = '헬로마켓'
 SEARCH_QUERIES = {'커피머신': ['에스프레소 머신', '커피머신 업소용'], '커피 그라인더': ['커피 그라인더'],
                   '제빙기': ['제빙기'], '업소용 냉장고': ['업소용 냉장고'], '테이블': ['카페 테이블', '테이블 업소용'], '의자': ['카페 의자', '카페 체어'],
                   # (2026-11-12 확대) 업소용 위주 검색어
-                  '쇼케이스 냉장고': ['쇼케이스 냉장고', '제과 쇼케이스'], '업소용 냉동고': ['업소용 냉동고'],
-                  '블렌더': ['업소용 블렌더', '블렌텍', '바이타믹스'], '정수기': ['업소용 정수기', '정수기'],
-                  '식기세척기': ['업소용 식기세척기', '식기세척기'], '오븐': ['컨벡션 오븐', '업소용 오븐'], '포스기': ['포스기', '포스 단말기'],
-                  '키오스크': ['키오스크'], '카드 단말기': ['카드단말기'], 'TV': ['디지털 사이니지', '메뉴판 TV', '스마트 TV'],
+                  '쇼케이스 냉장고': ['쇼케이스 냉장고', '제과 쇼케이스', '케이크 쇼케이스', '제과 냉장고'], '업소용 냉동고': ['업소용 냉동고', '쇼케이스 냉동고'],
+                  '블렌더': ['업소용 블렌더', '블렌텍', '바이타믹스'], '정수기': ['업소용 정수기', '정수기', '얼음정수기', '코웨이 정수기'],
+                  '식기세척기': ['업소용 식기세척기', '식기세척기'], '오븐': ['컨벡션 오븐', '업소용 오븐'], '포스기': ['포스기', '포스 단말기', 'POS'],
+                  '키오스크': ['키오스크'], '카드 단말기': ['카드단말기'], 'TV': ['디지털 사이니지', '메뉴판 TV', '스마트 TV', 'TV'],
+                  # (2026-11-12 2차) 검색 결과 실측으로 180일 내 사용 가능 매물이 나온 검색어만 추가
                   '선반': ['업소용 선반', '진열 선반', '스텐 선반'], '에어컨': ['스탠드 에어컨', '천장형 에어컨']}
 PHONE = re.compile(r'\d[\d\- ]{7,}\d')  # 제목 속 전화번호 등 긴 숫자열은 저장하지 않는다
 AGE = re.compile(r'(\d+)\s*(분|시간|일|개월|년)\s*전')
@@ -443,9 +444,22 @@ def collect_hansung(name=HANSUNG, registry=SOURCES):
     import csv
     import html as _html
     config = source_for(name, registry)
-    page = fetch(config['origin'] + '/')
+    origin = config['origin'].rstrip('/')
+    robot = _robot(origin)
+    pages = [origin + '/']  # 첫 화면 + 전체제품 목록 (빈 페이지가 나오면 중단)
+    for n in range(1, 11):
+        url = f'{origin}/category/{quote("전체제품")}/92/?page={n}'
+        if not robot.can_fetch(USER_AGENT, url):
+            break
+        time.sleep(max(2, float(config.get('delay_seconds', 2))))
+        html_page = fetch(url)
+        if 'anchorBoxId_' not in html_page:
+            break
+        pages.append(html_page)
+    pages[0] = fetch(pages[0])
     rows, seen = [], set()
-    for no, block in re.findall(r'<li[^>]+id="anchorBoxId_(\d+)"(.*?)(?=<li[^>]+id="anchorBoxId_|</ul>)', page, re.S):
+    blocks = [b for page in pages for b in re.findall(r'<li[^>]+id="anchorBoxId_(\d+)"(.*?)(?=<li[^>]+id="anchorBoxId_|</ul>)', page, re.S)]
+    for no, block in blocks:
         text = _html.unescape(re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', ' ', block)))
         m_name = re.search(r'상품명\s*:\s*(.+?)\s*판매가', text)
         m_price = re.search(r'판매가\s*:\s*([0-9,]+)\s*원', text)

@@ -1,14 +1,14 @@
-﻿csv_line_before,url,column,before,after,source_url,http_status,evidence,reason,checked_at
-5,https://www.hellomarket.com/item/184503309,model,,IMK-3700,https://www.hellomarket.com/item/184503309,200,모델명 : IMK-3700,본문의 명시 모델. 제목에는 없었음,2026-11-12
-5,https://www.hellomarket.com/item/184503309,spec,,수냉식 플레이크 약200kg,https://www.hellomarket.com/item/184503309,200,일일 제빙량 : 약 200kg,약(근사량) 표기와 냉각방식 보존. 정확한 정격 확정 아님,2026-11-12
-7,https://www.hellomarket.com/item/184019186,spec,100kg,확인불가: 제목100kg / 본문 일일92kg·저장50kg,https://www.hellomarket.com/item/184019186,200,1일제빙량: 92kg,제목 100kg와 본문 생산량 충돌. 단일 100kg 사양으로 비교 금지,2026-11-12
-8,https://www.hellomarket.com/item/184160569,model,,DAG-17,https://www.hellomarket.com/item/184160569,200,모델명: DAG-17,본문 명시 모델,2026-11-12
-9,https://www.hellomarket.com/item/184797340,item,테이블,업소용 냉장고,https://www.hellomarket.com/item/184797340,200,냉동 냉장 반반입니다,가구 테이블이 아닌 냉장냉동 겸용 테이블형 장비,2026-11-12
-9,https://www.hellomarket.com/item/184797340,spec,,사이즈1200(단위 미기재)·냉장냉동겸용,https://www.hellomarket.com/item/184797340,200,사이즈 1200,단위를 추정하지 않고 본문 규격 보존,2026-11-12
-18,https://www.hellomarket.com/item/177306600,manufacturer,,엔트프라이즈,https://www.hellomarket.com/item/177306600,200,명품.엔트프라이즈,본문 명시 브랜드. 빈티지 수동 장식용이므로 업소용 전동과 별도 평가,2026-11-12
-27,https://www.hellomarket.com/item/184205255,model,,UIM-50A,https://www.hellomarket.com/item/184205255,200,모델명: UIM-50A,본문 명시 모델. 사진 없는 추정 금지,2026-11-12
-53,https://www.hellomarket.com/item/184797347,item,테이블,업소용 냉동고,https://www.hellomarket.com/item/184797347,200,유니크 테이블 냉동고,테이블 가구 오분류 수정,2026-11-12
-53,https://www.hellomarket.com/item/184797347,manufacturer,우성,,https://www.hellomarket.com/item/184797347,200,유니크 테이블 냉동고,제목 우성과 본문 유니크 충돌. 어느 쪽도 임의 선택하지 않고 미확인으로 되돌림,2026-11-12
-56,https://www.hellomarket.com/item/184874660,spec,,가로230×세로65×높이85(단위 미기재),https://www.hellomarket.com/item/184874660,200,가로 230 세로65 높이85,단위가 없으므로 cm/mm 환산하지 않음,2026-11-12
-66,https://www.hellomarket.com/item/185186680,spec,,호퍼120g·소비전력110W,https://www.hellomarket.com/item/185186680,200,원두용량 – 120g,본문에 명시된 호퍼 용량과 전력만 보완,2026-11-12
-80,https://www.sosangspace.com/products/c95b6d82-a995-428c-b8d9-51c76fe5c68d,spec,30kg,확인불가: 제목30kg / 본문35kg,https://www.sosangspace.com/products/c95b6d82-a995-428c-b8d9-51c76fe5c68d,200,소형제빙기35kg,제목 30kg와 본문 35kg 충돌. 임의 확정하지 않음,2026-11-12
+﻿csv_line_before,url,column,before,after,source_url,http_status,evidence,reason,checked_at,csv_line_after
+5,https://www.hellomarket.com/item/184503309,model,,IMK-3700,https://www.hellomarket.com/item/184503309,200,모델명 : IMK-3700,본문의 명시 모델. 제목에는 없었음,2026-11-12,50
+5,https://www.hellomarket.com/item/184503309,spec,,수냉식 플레이크 약200kg,https://www.hellomarket.com/item/184503309,200,일일 제빙량 : 약 200kg,약(근사량) 표기와 냉각방식 보존. 정확한 정격 확정 아님,2026-11-12,50
+7,https://www.hellomarket.com/item/184019186,spec,100kg,확인불가: 제목100kg / 본문 일일92kg·저장50kg,https://www.hellomarket.com/item/184019186,200,1일제빙량: 92kg,제목 100kg와 본문 생산량 충돌. 단일 100kg 사양으로 비교 금지,2026-11-12,52
+8,https://www.hellomarket.com/item/184160569,model,,DAG-17,https://www.hellomarket.com/item/184160569,200,모델명: DAG-17,본문 명시 모델,2026-11-12,53
+9,https://www.hellomarket.com/item/184797340,item,테이블,업소용 냉장고,https://www.hellomarket.com/item/184797340,200,냉동 냉장 반반입니다,가구 테이블이 아닌 냉장냉동 겸용 테이블형 장비,2026-11-12,90
+9,https://www.hellomarket.com/item/184797340,spec,,사이즈1200(단위 미기재)·냉장냉동겸용,https://www.hellomarket.com/item/184797340,200,사이즈 1200,단위를 추정하지 않고 본문 규격 보존,2026-11-12,90
+18,https://www.hellomarket.com/item/177306600,manufacturer,,엔트프라이즈,https://www.hellomarket.com/item/177306600,200,명품.엔트프라이즈,본문 명시 브랜드. 빈티지 수동 장식용이므로 업소용 전동과 별도 평가,2026-11-12,62
+27,https://www.hellomarket.com/item/184205255,model,,UIM-50A,https://www.hellomarket.com/item/184205255,200,모델명: UIM-50A,본문 명시 모델. 사진 없는 추정 금지,2026-11-12,47
+53,https://www.hellomarket.com/item/184797347,item,테이블,업소용 냉동고,https://www.hellomarket.com/item/184797347,200,유니크 테이블 냉동고,테이블 가구 오분류 수정,2026-11-12,43
+53,https://www.hellomarket.com/item/184797347,manufacturer,우성,,https://www.hellomarket.com/item/184797347,200,유니크 테이블 냉동고,제목 우성과 본문 유니크 충돌. 어느 쪽도 임의 선택하지 않고 미확인으로 되돌림,2026-11-12,43
+56,https://www.hellomarket.com/item/184874660,spec,,가로230×세로65×높이85(단위 미기재),https://www.hellomarket.com/item/184874660,200,가로 230 세로65 높이85,단위가 없으므로 cm/mm 환산하지 않음,2026-11-12,72
+66,https://www.hellomarket.com/item/185186680,spec,,호퍼120g·소비전력110W,https://www.hellomarket.com/item/185186680,200,원두용량 – 120g,본문에 명시된 호퍼 용량과 전력만 보완,2026-11-12,109
+80,https://www.sosangspace.com/products/c95b6d82-a995-428c-b8d9-51c76fe5c68d,spec,30kg,확인불가: 제목30kg / 본문35kg,https://www.sosangspace.com/products/c95b6d82-a995-428c-b8d9-51c76fe5c68d,200,소형제빙기35kg,제목 30kg와 본문 35kg 충돌. 임의 확정하지 않음,2026-11-12,123
