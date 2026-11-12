@@ -63,7 +63,7 @@ def _client():
     global _CLIENT
     if _CLIENT is None:
         # 1회 호출 최대 20초. 넘으면 재시도/대체 모델로 (보완 단계가 2분씩 걸리던 문제)
-        _CLIENT = genai.Client(api_key=get_api_key(), http_options=types.HttpOptions(timeout=20000))
+        _CLIENT = genai.Client(api_key=get_api_key(), http_options=types.HttpOptions(timeout=60000))  # 혼잡 시 사진 분석 15~26초 실측 → 20초면 잘림
     return _CLIENT
 
 
