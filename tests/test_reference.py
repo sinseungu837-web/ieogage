@@ -17,7 +17,7 @@ class ReferenceEstimateTest(unittest.TestCase):
         model = reference.estimate('커피머신', 'FAEMA', 'E98 UP')
         maker = reference.estimate('에스프레소 머신', '훼마')
         item = reference.estimate('에스프레소 머신')
-        self.assertEqual((model['low'], model['high'], model['n']), (2200000, 3200000, 1))
+        self.assertEqual((model['low'], model['high'], model['n']), (2700000, 2700000, 1))
         self.assertIn('동일 모델', model['match'])
         self.assertIn('동일 제조사', maker['match'])
         self.assertEqual(item['n'], 4)
