@@ -191,7 +191,7 @@ def analyze_photo(image, key):
     model, processor = get_vision()
     T["모델 준비"] = _t.time() - T.pop("load")
     _s = _t.time()
-    if vision.DETECTOR == "gemini":  # [실험] Gemini 단독 탐지: 1회 호출로 탐지·이름·분류까지
+    if True:  # Gemini 단독 탐지 (최종): 1회 호출로 탐지·이름·분류까지
         with st.spinner("사진 전체에서 판매할 물건을 찾는 중 (Gemini)..."):
             try:
                 det, result = llm.detect_all(image)
@@ -213,42 +213,6 @@ def analyze_photo(image, key):
         }
         go_to(3)
         return
-    with st.spinner("① 사진에서 물체를 찾는 중 (RF-DETR)..."):
-        det = vision.detect(model, processor, image)
-    kept, dropped = vision.code_filter(det["objects"], image.size)
-    T["1단계 탐지"] = _t.time() - _s; _s = _t.time()
-    with st.spinner("② 판매할 수 있는 집기만 고르는 중 (Gemini)..."):
-        try:
-            result = llm.classify_items(kept) if kept else {"items": [], "excluded": []}
-        except Exception as e:
-            st.error("AI 판별 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.")
-            st.caption(type(e).__name__)
-            st.stop()
-    T["Gemini 판별"] = _t.time() - _s; _s = _t.time()
-    with st.spinner("③ 놓친 장비를 찾는 중 (Gemini가 사진 전체 확인)..."):
-        try:
-            new_objs, new_items = llm.find_missing(image, result, det["objects"])
-            det["objects"] += new_objs
-            result["items"] += new_items
-        except Exception:
-            pass  # 보완 실패 시 기존 결과 유지
-    T["Gemini 보완"] = _t.time() - _s; _s = _t.time()
-    with st.spinner("④ 헷갈리는 장비만(보완 결과 포함) 이미지로 다시 확인하는 중 (Gemini)..."):
-        try:
-            result = llm.verify_ambiguous(image, kept + [o for o in det["objects"] if o.get("task") == "GEMINI"], result)
-        except Exception:
-            result["verified"] = []  # 재확인 실패 시 1차 판별 결과를 그대로 사용
-    T["Gemini 재확인"] = _t.time() - _s
-    det["timing"] = {k: round(v, 1) for k, v in T.items()}
-    st.session_state.last = {
-        "key": key, "image": image, "det": det, "kept": kept, "dropped": dropped, "result": result,
-        # [소정] 사용자 직접 수정용 상태: 박스 번호별 품목명, 새 박스 번호, 클릭 위치, 선택 박스
-        "box_names": {i: it["name"] for it in result["items"] for i in it["source_ids"]},
-        "next_id": max([o["id"] for o in det["objects"]], default=0) + 1,
-        "pending_box": None,
-        "selected_box_id": None,
-    }
-    go_to(3)
 
 
 def edit_page(last):

@@ -1,4 +1,4 @@
-"""1단계 물체 탐지. DETECTOR=gemini(기본, 실험 중): Gemini 단독 탐지 / DETECTOR=rfdetr: RF-DETR nano + 코드 필터."""
+"""사진 준비 도우미. 탐지는 Gemini 단독(llm.detect_all)으로 확정 (2026-11-12, RF-DETR 제거)."""
 from __future__ import annotations
 
 import os
@@ -10,8 +10,8 @@ from PIL import Image
 
 load_dotenv(Path(__file__).parent / ".env")  # 로컬 .env (GEMINI_API_KEY 등). 서버는 Secrets 사용
 
-# 탐지 방식 스위치: "gemini" = Gemini 혼자 사진 전체 탐지(2026-11-11 실험, 기본) / "rfdetr" = RF-DETR 1차 탐지
-DETECTOR = os.environ.get("DETECTOR", "gemini")
+# 최종 결정(2026-11-12): Gemini 단독 탐지. 로컬 탐지 모델(RF-DETR·Florence)은 사용하지 않음
+DETECTOR = "gemini"
 
 RFDETR_THRESHOLD = 0.35  # 이 점수 미만 박스는 버림
 LOW_CONF = 0.5  # 이 점수 미만은 '애매함' → Gemini 사진 재확인 대상
@@ -53,13 +53,8 @@ def _cpu_limit() -> int:
 
 
 def load_model():
-    """(모델, 프로세서). Gemini 단독 모드는 로컬 모델이 없어 (None, None)."""
-    if DETECTOR == "gemini":
-        return None, None
-    import torch
-    from rfdetr import RFDETRNano
-    torch.set_num_threads(_cpu_limit())
-    return RFDETRNano(), None
+    """로컬 모델 없음 (Gemini 단독 탐지)."""
+    return None, None
 
 
 def prepare(image: Image.Image) -> Image.Image:
@@ -67,17 +62,6 @@ def prepare(image: Image.Image) -> Image.Image:
     if max(image.size) > MAX_SIDE:
         image.thumbnail((MAX_SIDE, MAX_SIDE))
     return image
-
-
-def detect(model, processor, image: Image.Image) -> dict:
-    from rfdetr.utilities.class_names import COCO_CLASSES
-    t0 = time.time()
-    d = model.predict(image, threshold=RFDETR_THRESHOLD)
-    objs = []
-    for i, (box, cid, score) in enumerate(zip(d.xyxy, d.class_id, d.confidence)):
-        objs.append({"id": i, "label": COCO_CLASSES[int(cid)], "box": [round(float(v), 1) for v in box],
-                     "task": "RFDETR", "score": round(float(score), 2)})
-    return {"objects": objs, "rejected": [], "seconds": round(time.time() - t0, 1), "truncated": False}
 
 
 def _iou(a, b):
