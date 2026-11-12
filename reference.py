@@ -104,9 +104,15 @@ def estimate(name, manufacturer='', model='', spec=''):
     if spec and len(sel) > 1:
         same = [r for r in sel if r['spec'] and listings.spec_key(r['spec']) == listings.spec_key(spec)]
         sel = same or sel
-    low = int(statistics.median(r['used_low'] for r in sel))
-    high = int(statistics.median(r['used_high'] for r in sel))
-    mid = int(statistics.median((r['used_low'] + r['used_high']) / 2 for r in sel))
+    if len(sel) > 1 and all(r['used_low'] == r['used_high'] for r in sel):
+        # 게시가 1건씩인 행 여러 개 (통합 시세표) → 가격들의 Q1·중앙값·Q3 로 범위
+        vals = sorted(r['used_low'] for r in sel)
+        q1, _, q3 = statistics.quantiles(vals, n=4, method='inclusive')
+        low, mid, high = int(q1), int(statistics.median(vals)), int(q3)
+    else:
+        low = int(statistics.median(r['used_low'] for r in sel))
+        high = int(statistics.median(r['used_high'] for r in sel))
+        mid = int(statistics.median((r['used_low'] + r['used_high']) / 2 for r in sel))
     mid = min(max(mid, low), high)
     sources = sorted({s.strip() for r in sel for s in r['survey_sources'].split(',') if s.strip()})
     return {'low': low, 'mid': mid, 'high': high, 'n': len(sel), 'price_basis': 'reference',

@@ -82,14 +82,14 @@ def _generate(**kw):
         try:
             return _client().models.generate_content(model=m, **kw)
         except (errors.ServerError, errors.ClientError) as e:
-            if getattr(e, "code", None) not in (429, 500, 503, 504):
+            if getattr(e, "code", None) not in (404, 429, 500, 503, 504):  # 404: 그 모델이 사라짐 → 다음 모델로
                 raise
             last = e
         except Exception as e:  # 시간 초과 등 네트워크 오류
             last = e
     raise last
 
-FALLBACK_MODELS = ["gemini-3.5-flash-lite", "gemini-flash-lite-latest"]  # 실측으로 응답이 더 안정적인 순서
+FALLBACK_MODELS = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-flash-lite-latest"]  # 실측으로 응답이 더 안정적인 순서
 
 def _model(model):
     return model or os.environ.get("GEMINI_MODEL", DEFAULT_MODEL)
