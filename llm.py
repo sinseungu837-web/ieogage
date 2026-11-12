@@ -89,7 +89,7 @@ def _generate(**kw):
             last = e
     raise last
 
-FALLBACK_MODELS = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-flash-lite-latest"]  # 실측으로 응답이 더 안정적인 순서
+FALLBACK_MODELS = ["gemini-flash-lite-latest", "gemini-3.1-flash-lite", "gemini-3.5-flash-lite"]  # 2026-11-13 같은 사진 실측: latest·3.1 은 테이블 4개 탐지  # 실측으로 응답이 더 안정적인 순서
 
 def _model(model):
     return model or os.environ.get("GEMINI_MODEL", DEFAULT_MODEL)
@@ -296,6 +296,7 @@ def detect_all(image, model: str | None = None) -> tuple[dict, dict]:
         "- [중요] 아래 [시세표] 에 있는 품목만 찾는다. 표에 없는 물건(컵·조명·화분·장식·재고 등)은 출력하지 않는다. name 은 표의 품목 이름 그대로.",
         "- 카운터 안쪽·뒤쪽 장비도 빠짐없이 찾는다. 위에 원두가 담긴 투명 통(호퍼)이 달린 기계는 \"커피 그라인더\" (여러 대면 각각 박스).",
         "- 사진이 여러 장 이어 붙여진 경우 각 칸을 모두 살펴본다.",
+        "- 의자 근처의 테이블(사각·원형 상판 + 다리)도 반드시 찾는다. 테이블이 여러 개면 각각 박스. 의자만 찾고 테이블을 빠뜨리지 말 것.",
         "- brand: 그 품목의 후보 제조사 중 하나를 반드시 고른다. 로고·명판 글자가 보이면 그 제조사, 안 보이면 모양·색·크기·디테일이 가장 비슷한 후보를 예측한다.",
         "- 같은 품목의 박스끼리 모양·색·로고 특징이 같으면 같은 brand, 눈에 띄게 다르면 서로 다른 brand 를 고른다 (예: 의자 6개 중 4개와 2개가 다르게 생겼으면 두 제조사로 나눔).",
         "- model: 고른 제조사의 후보 모델명을 그대로 적는다. brand_basis: 로고·글자가 읽혔으면 \"로고\", 아니면 \"형태 예측\".",
