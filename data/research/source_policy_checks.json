@@ -1,0 +1,54 @@
+[
+  {
+    "url": "https://www.sosangspace.com/robots.txt",
+    "status": 200,
+    "bytes": 974,
+    "final_url": "https://www.sosangspace.com/robots.txt",
+    "decision": "수동 소수 원문 조사만. 자동 수집 허가로 간주하지 않음; 신규 크롤러 등록 없음."
+  },
+  {
+    "url": "https://www.sosangspace.com/terms",
+    "status": 404,
+    "decision": "수동 소수 원문 조사만. 자동 수집 허가로 간주하지 않음; 신규 크롤러 등록 없음."
+  },
+  {
+    "url": "https://www.hellomarket.com/robots.txt",
+    "status": 200,
+    "bytes": 266,
+    "final_url": "https://www.hellomarket.com/robots.txt",
+    "decision": "수동 소수 원문 조사만. 자동 수집 허가로 간주하지 않음; 신규 크롤러 등록 없음."
+  },
+  {
+    "url": "https://www.hellomarket.com/terms.hm",
+    "status": 500,
+    "decision": "수동 소수 원문 조사만. 자동 수집 허가로 간주하지 않음; 신규 크롤러 등록 없음."
+  },
+  {
+    "url": "https://cafedirectmall.com/robots.txt",
+    "status": 200,
+    "bytes": 1276,
+    "final_url": "https://cafedirectmall.com/robots.txt",
+    "decision": "수동 소수 원문 조사만. 자동 수집 허가로 간주하지 않음; 신규 크롤러 등록 없음."
+  },
+  {
+    "url": "https://cafedirectmall.com/member/agreement.html",
+    "status": 200,
+    "bytes": 239367,
+    "final_url": "https://cafedirectmall.com/member/agreement.html",
+    "decision": "수동 소수 원문 조사만. 자동 수집 허가로 간주하지 않음; 신규 크롤러 등록 없음."
+  },
+  {
+    "url": "https://coffeescience.co.kr/robots.txt",
+    "status": 200,
+    "bytes": 1303,
+    "final_url": "https://coffeescience.co.kr/robots.txt",
+    "decision": "수동 소수 원문 조사만. 자동 수집 허가로 간주하지 않음; 신규 크롤러 등록 없음."
+  },
+  {
+    "url": "https://coffeescience.co.kr/member/agreement.html",
+    "status": 200,
+    "bytes": 129754,
+    "final_url": "https://coffeescience.co.kr/member/agreement.html",
+    "decision": "수동 소수 원문 조사만. 자동 수집 허가로 간주하지 않음; 신규 크롤러 등록 없음."
+  }
+]
