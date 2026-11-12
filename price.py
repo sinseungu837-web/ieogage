@@ -209,6 +209,41 @@ def onbid_estimate(name: str, manufacturer="", model="", spec="", condition="") 
             "source": f"온비드 공매 개별 낙찰 {len(vals)}건 (최근 2년)", "evidence": rows, "search_url": search_url}
 
 
+# 최후 예비: 조달청 나라장터쇼핑몰 신품 계약단가 × 감가 (공공데이터포털 15129471, 같은 DATA_GO_KR_KEY)
+# 가전(냉장고·제빙기·커피머신)은 이 API에 개별 단가가 없어 가구·오븐·모니터만 대상.
+PPS_URL = "https://apis.data.go.kr/1230000/at/ShoppingMallPrdctInfoService/getShoppingMallPrdctInfoList"
+PPS_ITEMS = {"의자": "의자", "스툴": "의자", "테이블": "테이블", "소파": "소파", "오븐": "오븐",
+             "모니터": "모니터", "디지털 메뉴보드": "모니터"}
+# 연식을 모를 때의 잔존가 비율 (배민외식업광장 폐업 컨설턴트 기준: 2년 내 40~50%, 5년 내 20~30%, 5년+ 10% 이하)
+DEPRECIATION = (0.2, 0.3, 0.5)
+
+
+def new_price_estimate(name: str) -> dict:
+    key, word = _key(), PPS_ITEMS.get(name)
+    if not key or not word:
+        return empty_estimate(name)
+    end = date.today()
+    params = {"serviceKey": key, "type": "json", "pageNo": 1, "numOfRows": 100, "inqryDiv": "1",
+              "inqryBgnDt": (end - timedelta(days=3 * 365)).strftime("%Y%m%d0000"),
+              "inqryEndDt": end.strftime("%Y%m%d0000"), "prdctClsfcNoNm": word}
+    with urllib.request.urlopen(PPS_URL + "?" + urllib.parse.urlencode(params), timeout=15) as r:
+        body = json.load(r)["response"]["body"]
+    items = body.get("items") or []
+    items = items if isinstance(items, list) else items.get("item", [])
+    vals = _drop_outliers(sorted(int(x["cntrctPrceAmt"]) for x in items
+                                 if str(x.get("cntrctPrceAmt", "")).isdigit() and x.get("prdctUnit") in ("개", "대", "EA")))
+    if len(vals) < MIN_SAMPLES:
+        return empty_estimate(name, n=len(vals))
+    med = statistics.median(vals)
+    lo, mi, hi = DEPRECIATION
+    return {**empty_estimate(name), "low": int(med * lo), "mid": int(med * mi), "high": int(med * hi), "n": len(vals),
+            "source": f"신품가 기준 추정 · 조달청 쇼핑몰 신품 계약단가 {len(vals)}건 중앙값 {int(med):,}원 × 잔존율 20~50%",
+            "match": "품목 신품가 × 감가 (연식 미확인)", "confidence": "낮음", "price_basis": "new_depreciated",
+            "collected_at": end.isoformat(),
+            "evidence": [{"title": x.get("prdctSpecNm", ""), "price": x.get("cntrctPrceAmt"), "source": "조달청 나라장터쇼핑몰"}
+                         for x in items[:20]]}
+
+
 # 새 경로: 사전 수집 CSV 우선. 게시 가격과 공매 낙찰가는 결합하지 않는다.
 def db_revision():
     from listings import LISTINGS
@@ -320,10 +355,19 @@ def estimate(name: str, manufacturer='', model='', spec='', condition='', *,
     if allow_onbid:
         try:
             fallback = onbid_estimate(name, manufacturer, model, spec, condition)
-            if fallback['mid'] is not None or (not result['n'] and fallback['n']):
-                return {**result, **fallback, 'price_basis': 'auction',
+            as_onbid = {**result, **fallback, 'price_basis': 'auction',
                         'match': '온비드 제목 기반 참고 시세', 'confidence': '낮음',
                         'collected_at': listings.today().isoformat()}
+            if fallback['mid'] is not None:
+                return as_onbid
+        except Exception:
+            fallback, as_onbid = {'n': 0}, None
+        try:  # 마지막 예비: 신품가 × 감가 (가구·오븐·모니터)
+            newp = new_price_estimate(name)
+            if newp['mid'] is not None:
+                return newp
         except Exception:
             pass
+        if as_onbid and not result['n'] and fallback['n']:
+            return as_onbid
     return result

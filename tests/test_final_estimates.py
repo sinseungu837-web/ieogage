@@ -93,7 +93,10 @@ ns['final_page'](last)
         self.assertTrue(any('100,000원 ~ 200,000원' in value.value for value in page.markdown))
 
     def test_empty_real_db_without_api_key(self):
-        with patch.object(price, '_key', return_value=None):
+        # 실제 DB 에 매물이 쌓였으므로, '빈 DB + 키 없음' 조건은 존재하지 않는 임시 경로로 재현한다.
+        import listings
+        with patch.object(price, '_key', return_value=None), \
+                patch.object(listings, 'LISTINGS', ROOT / 'data' / '_empty_for_test.csv'):
             page = self.render()
         self.assertEqual(len(page.exception), 0)
         self.assertTrue(page.dataframe[1].value['개당 대표 가격 (원)'].isna().all())
