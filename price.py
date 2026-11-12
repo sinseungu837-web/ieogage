@@ -288,6 +288,17 @@ def db_revision():
         return None
 
 
+REFERENCE_ONLY = True  # 2026-11-12 팀 결정: 서비스 화면 가격은 팀 조사 시세표에서만
+
+
+def service_estimate(name: str, manufacturer='', model='', spec='', condition='') -> dict:
+    """앱이 쓰는 가격 조회. 시세표 모드면 팀 조사 시세표만, 아니면 기존 DB·실시간·공매 경로."""
+    if REFERENCE_ONLY:
+        import reference
+        return reference.estimate(name, manufacturer, model, spec) or empty_estimate(name, '팀 조사 시세표에 없는 품목')
+    return estimate(name, manufacturer, model, spec, condition)
+
+
 def empty_estimate(name, reason='가격 근거 부족', n=0):
     return {'low': None, 'mid': None, 'high': None, 'n': n, 'source': reason,
             'evidence': [], 'search_url': 'https://search.daum.net/search?q=' +

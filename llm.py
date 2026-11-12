@@ -9,9 +9,13 @@ import re
 from pathlib import Path
 
 from google import genai
+
+import reference
 from google.genai import types
 
 PROMPT_FILE = Path(__file__).parent / "prompts" / "item_filter_v4.md"
+# 2026-11-12 팀 결정: 팀 조사 시세표(data/reference_prices.csv)의 품목만 찾고 제조사·모델은 그 후보에서 예측
+REFERENCE_ONLY = True
 DEFAULT_MODEL = "gemini-3.1-flash-lite"
 
 # 서로 헷갈리기 쉬운 장비 묶음: 이 이름으로 판별된 품목은 이미지로 다시 확인한다
@@ -286,11 +290,21 @@ def detect_all(image, model: str | None = None) -> tuple[dict, dict]:
         "- 집기인지 고정 설비인지 사진만으로 애매하면 고정 설비로 두고 uncertain=true.",
         "- 화면이 달린 기계는 커피머신·포스기·키오스크·TV·디지털 메뉴보드 중 무엇인지 구분.",
         "- 확실하지 않으면 uncertain=true. 보이지 않는 물건은 절대 추가하지 말 것. 가격은 쓰지 말 것.",
+    ] + ([
+        "- [중요] 아래 [시세표] 에 있는 품목만 찾는다. 표에 없는 물건(컵·조명·화분·장식·재고 등)은 출력하지 않는다. name 은 표의 품목 이름 그대로.",
+        "- brand: 그 품목의 후보 제조사 중 하나를 반드시 고른다. 로고·명판 글자가 보이면 그 제조사, 안 보이면 모양·색·크기·디테일이 가장 비슷한 후보를 예측한다.",
+        "- 같은 품목의 박스끼리 모양·색·로고 특징이 같으면 같은 brand, 눈에 띄게 다르면 서로 다른 brand 를 고른다 (예: 의자 6개 중 4개와 2개가 다르게 생겼으면 두 제조사로 나눔).",
+        "- model: 고른 제조사의 후보 모델명을 그대로 적는다. brand_basis: 로고·글자가 읽혔으면 \"로고\", 아니면 \"형태 예측\".",
+        "[시세표] 품목: 제조사(영문): 대표 모델",
+        reference.prompt_table(),
+        "box_2d=[ymin,xmin,ymax,xmax] (0~1000 정규화). JSON 만:",
+        '{"items":[{"name":"...","category":"집기","box_2d":[0,0,0,0],"brand":"","model":"","brand_basis":"형태 예측","fixed":false,"uncertain":false}]}',
+    ] if REFERENCE_ONLY else [
         "- brand·model: 물건의 로고·명판·라벨 글자가 사진에서 직접 읽히는 경우에만 그 글자 그대로 적는다 (예: brand \"La Marzocco\", model \"Linea PB\"). 글자가 안 보이면 빈 문자열. 모양만 보고 추측하지 말 것.",
         f"- 품목 이름은 가능하면 다음 사전에서: {p['dictionary']}",
         "box_2d=[ymin,xmin,ymax,xmax] (0~1000 정규화). JSON 만:",
         '{"items":[{"name":"...","category":"집기","box_2d":[0,0,0,0],"brand":"","model":"","fixed":false,"uncertain":false}]}',
-    ])
+    ]))
     resp = _generate(
         model=_model(model), contents=[instruction, types.Part.from_bytes(data=buf.getvalue(), mime_type="image/jpeg")],
         config=types.GenerateContentConfig(temperature=0.1, response_mime_type="application/json"),
@@ -304,6 +318,14 @@ def detect_all(image, model: str | None = None) -> tuple[dict, dict]:
         name, b = str(it.get("name", "")).strip(), it.get("box_2d")
         if not name or not (isinstance(b, list) and len(b) == 4):
             continue  # 박스 근거가 없는 품목은 버림 (지어낸 물건 차단)
+        brand, model, basis = str(it.get("brand") or "").strip(), str(it.get("model") or "").strip(), ""
+        if REFERENCE_ONLY:
+            name = reference.item_key(name)
+            if not reference.candidates(name):
+                continue  # 시세표에 없는 품목은 찾지 않음
+            brand = reference.match_maker(name, brand)  # 후보 밖 이름은 버리고 시세표 이름으로 통일
+            model = reference.match_model(name, brand, model) if brand else ""
+            basis = ("로고" if "로고" in str(it.get("brand_basis", "")) else "형태 예측") if brand else ""
         y1, x1, y2, x2 = [float(v) for v in b]
         box = [x1 * W / 1000, y1 * H / 1000, x2 * W / 1000, y2 * H / 1000]
         if box[2] - box[0] < 6 or box[3] - box[1] < 6:
@@ -312,7 +334,8 @@ def detect_all(image, model: str | None = None) -> tuple[dict, dict]:
             continue  # 같은 물건을 두 번 그린 경우
         oid = len(objs)
         objs.append({"id": oid, "label": name, "box": [round(v, 1) for v in box], "task": "GEMINI",
-                     "brand": str(it.get("brand") or "").strip(), "model": str(it.get("model") or "").strip()})
+                     "brand": brand, "model": model, "brand_basis": basis,
+                     "spec": ",".join(m.replace(" ", "") for m in re.findall(r"\d+\s*그룹|\d+\s*kg|\d+\s*평형", model, re.I))})
         g = groups.setdefault(name, {"ids": [], "cat": it.get("category", "집기"), "unc": False, "fixed": False})
         g["ids"].append(oid)
         g["unc"] |= bool(it.get("uncertain"))

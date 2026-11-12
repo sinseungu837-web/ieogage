@@ -208,8 +208,11 @@ def analyze_photo(image, key):
             "pending_box": None,
             "selected_box_id": None,
             # 사진에서 로고·명판 글자가 읽힌 경우만 채워짐 (3단계 표에서 사용자가 수정 가능)
+            # Gemini 가 시세표 후보 중에서 예측한 제조사·모델 (3단계 표에서 사용자가 수정 가능)
             "manufacturers": {o["id"]: o["brand"] for o in det["objects"] if o.get("brand")},
             "models": {o["id"]: o["model"] for o in det["objects"] if o.get("model")},
+            "specs": {o["id"]: o["spec"] for o in det["objects"] if o.get("spec")},
+            "brand_basis": {o["id"]: o["brand_basis"] for o in det["objects"] if o.get("brand_basis")},
         }
         go_to(3)
         return
@@ -377,6 +380,8 @@ def apply_inventory_edit(last, rows, widget_key):
                 last['box_names'][oid] = name
                 if name != row['집기명']:
                     st.session_state[f'edit_input_{oid}'] = name
+            if maker != row['제조사']:
+                last.setdefault('edited_makers', set()).add(oid)  # 화면에 '사용자 입력'으로 표시
             last.setdefault('manufacturers', {})[oid] = maker if maker != '미확인' else ''
             for column, key in (('모델명', 'models'), ('사양', 'specs'), ('상태', 'conditions')):
                 last.setdefault(key, {})[oid] = str(fields.get(column, row.get(column, '')) or '').strip()
@@ -442,7 +447,7 @@ def photo_page():
 
 def edit_inventory_table(last):
     st.subheader('집기 목록 수정')
-    st.caption('집기명·제조사·모델명·사양·상태를 수정할 수 있습니다. 사양은 용량·그룹 수 등으로 입력하고, 모르는 정보는 비워 두세요. 개수는 박스 추가·삭제에 맞춰 자동으로 계산됩니다.')
+    st.caption('제조사·모델명은 AI가 팀 조사 시세표의 후보 중에서 예측한 값입니다 (로고가 안 보이면 형태로 예측). 틀리면 직접 고쳐 주세요. 집기명·제조사·모델명·사양·상태를 수정할 수 있습니다. 사양은 용량·그룹 수 등으로 입력하고, 모르는 정보는 비워 두세요. 개수는 박스 추가·삭제에 맞춰 자동으로 계산됩니다.')
     rows = inventory_rows(last)
     if not rows:
         st.info('목록이 비어 있습니다. 사진에서 영역을 지정해 물건을 추가할 수 있습니다.')
@@ -460,7 +465,7 @@ def edit_inventory_table(last):
 @st.cache_data(ttl=3600, show_spinner=False)
 def cached_estimate(name: str, manufacturer='', model='', spec='', condition='', revision=None) -> dict:
     # DB 교체 즉시 캐시 키가 바뀐다. 수집은 이 함수나 업로드 과정에서 실행하지 않는다.
-    return price.estimate(name, manufacturer, model, spec, condition)
+    return price.service_estimate(name, manufacturer, model, spec, condition)
 
 
 def final_page(last):
@@ -499,6 +504,10 @@ def final_page(last):
     st.subheader('최종 집기 목록')
     columns = ['집기명', '제조사', '개수', '모델명', '사양', '상태']
     table = pd.DataFrame([{k: row.get(k, '') for k in columns} for row in rows], columns=columns)
+    edited = last.get('edited_makers', set())
+    basis = last.get('brand_basis', {})
+    table['제조사 근거'] = ['사용자 입력' if any(i in edited for i in r['box_ids']) else
+                       next((basis[i] for i in r['box_ids'] if basis.get(i)), '') for r in rows]
     st.dataframe(table, hide_index=True, use_container_width=True)
     if fixed:
         st.caption('고정 설비로 분류되어 견적에서 제외: '
@@ -529,7 +538,7 @@ def final_page(last):
         '예상 매각액 하한 (원)': money, '예상 매각액 상한 (원)': money,
         '직접 검색': st.column_config.LinkColumn(display_text='검색'),
     })
-    st.caption('개당 Q1(25%)·중앙값·Q3(75%) × 수량으로 계산합니다. 유효 표본 3건 미만은 가격 근거 부족으로 표시합니다. '
+    st.caption('현재 가격은 팀 조사 시세표(품목·제조사·대표 모델별 중고 시세 범위)에서만 냅니다. 모델 → 제조사 → 품목 평균 순서로 찾으며, 개별 매물 원문 링크가 없는 조사값이라 실제 매각액과 다를 수 있습니다. 개당 Q1(25%)·중앙값·Q3(75%) × 수량으로 계산합니다. 유효 표본 3건 미만은 가격 근거 부족으로 표시합니다. '
                'DB는 최근 180일의 실제 개별 매물만 사용하며 샘플·묶음은 제외합니다. '
                '제조사·모델·사양이 없으면 신뢰도가 낮은 참고 시세입니다. 판매 완료 게시 가격도 실제 거래액을 보장하지 않습니다. '
                '보조 온비드 기록은 최근 2년의 공매 낙찰가로 일반 중고 시세보다 낮을 수 있습니다.')
