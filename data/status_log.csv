@@ -527,3 +527,899 @@ url             https://www.hellomarket.com/item/184205255
 collected_at                                    2026-11-12
 is_sample                                            false
 Name: 82, dtype: object>",https://www.hellomarket.com/item/184205255,500000,500000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                카드 단말기
+manufacturer                                              
+model                                                     
+spec                                                      
+title                                            카드 단말기 판매
+condition                                               중고
+price                                                10000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/172631952
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 153, dtype: object>",https://www.hellomarket.com/item/172631952,10000,10000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                    TV
+manufacturer                                              
+model                                                     
+spec                                                      
+title                             옛날 tv 핸드폰 (옛날 스마트폰)(*희귀)
+condition                                               중고
+price                                               165000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/173081255
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 154, dtype: object>",https://www.hellomarket.com/item/173081255,165000,165000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                    TV
+manufacturer                                              
+model                                                  UHD
+spec                                                  65인치
+title                                LG 삼성 65인치 UHD 스마트 TV
+condition                                               중고
+price                                                12345
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/181501506
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 155, dtype: object>",https://www.hellomarket.com/item/181501506,12345,12345,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                    오븐
+manufacturer                                          키친아트
+model                                             KNOV-C20
+spec                                                   20L
+title              (키친아트) KNOV-C20 멀티 컨벡션 전기오븐 20L 이중열선 3단
+condition                                               중고
+price                                                40000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/185186947
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 156, dtype: object>",https://www.hellomarket.com/item/185186947,40000,40000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                    TV
+manufacturer                                              
+model                                                     
+spec                                                      
+title                        미라캐스트 스마트폰 컴퓨터화면 TV전송 미러링.동글이
+condition                                               중고
+price                                                14000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/170144844
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 157, dtype: object>",https://www.hellomarket.com/item/170144844,14000,14000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                   테이블
+manufacturer                                            우성
+model                                                     
+spec                                                  1200
+title                                  업소용 우성 1200 테이블 냉동고
+condition                                               중고
+price                                               800000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/184797347
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 158, dtype: object>",https://www.hellomarket.com/item/184797347,800000,800000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                               커피 그라인더
+manufacturer                                              
+model                                                스타커피밀
+spec                                                      
+title                            빈티지 영국산 더블휠 스타커피밀(커피그라인더)
+condition                                               중고
+price                                               530000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/181420203
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 159, dtype: object>",https://www.hellomarket.com/item/181420203,530000,530000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                 식기세척기
+manufacturer                                         유니마스타
+model                                                     
+spec                                                      
+title                                          유니마스타 식기세척기
+condition                                               중고
+price                                               550000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/184569379
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 160, dtype: object>",https://www.hellomarket.com/item/184569379,550000,550000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                               커피 그라인더
+manufacturer                                              
+model                                                     
+spec                                                      
+title                            빈티지 수동 커피 그라인더 인테리어 장식 소품
+condition                                               중고
+price                                                30000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/183970133
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 161, dtype: object>",https://www.hellomarket.com/item/183970133,30000,30000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                   제빙기
+manufacturer                                              
+model                                                     
+spec                                                      
+title                   새거 같은 중고 제빙기 2021년형 3회사용 얼음 만드는 기계
+condition                                               중고
+price                                               125000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/173960918
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 162, dtype: object>",https://www.hellomarket.com/item/173960918,125000,125000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                   제빙기
+manufacturer                                            sk
+model                                                     
+spec                                                      
+title                                       SK제빙기 10만원에팝니다
+condition                                               중고
+price                                               100000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/181772852
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 163, dtype: object>",https://www.hellomarket.com/item/181772852,100000,100000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                   제빙기
+manufacturer                                            대웅
+model                                          DW-ICE12K8W
+spec                                                   슬림형
+title                           대웅 슬림형 제빙기 DW-ICE12K8W 화이트
+condition                                               중고
+price                                                60000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/184882181
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 164, dtype: object>",https://www.hellomarket.com/item/184882181,60000,60000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                   제빙기
+manufacturer                                          sk매직
+model                                                     
+spec                                                      
+title                    SK매직 정수기(WPU-C400C)와 제빙기(SIM-015)
+condition                                               중고
+price                                              1000000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/185188628
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 165, dtype: object>",https://www.hellomarket.com/item/185188628,1000000,1000000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                               업소용 냉장고
+manufacturer                                              
+model                                                     
+spec                                        25박스,30박스,45박스
+title                                업소용냉장고 45박스 30박스 25박스
+condition                                               중고
+price                                               450000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/184332356
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 166, dtype: object>",https://www.hellomarket.com/item/184332356,450000,450000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                  키오스크
+manufacturer                                          아이머신
+model                                                     
+spec                                                      
+title                                   아이머신 현금 카드 겸용 키오스크
+condition                                               중고
+price                                               500000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/185103347
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 167, dtype: object>",https://www.hellomarket.com/item/185103347,500000,500000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                 식기세척기
+manufacturer                                              
+model                                                     
+spec                                                      
+title                              미니냉장고, 식기세척기, 소형 의류 건조기
+condition                                               중고
+price                                               230000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/185159326
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 168, dtype: object>",https://www.hellomarket.com/item/185159326,230000,230000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                    TV
+manufacturer                                            lg
+model                                                     
+spec                                                      
+title                       LG 50인치 4K UHD AI 스마트TV 26년 구매
+condition                                               중고
+price                                               480000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/185102855
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 169, dtype: object>",https://www.hellomarket.com/item/185102855,480000,480000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                   정수기
+manufacturer                                              
+model                                                     
+spec                                                      
+title                         정수기 판매 새것같은 중고,리퍼 저렴하게 사용하세요
+condition                                               중고
+price                                                90000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/168370668
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 180, dtype: object>",https://www.hellomarket.com/item/168370668,90000,90000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                   테이블
+manufacturer                                              
+model                                                     
+spec                               가로230×세로65×높이85(단위 미기재)
+title                                        카페용 원목 다이/테이블
+condition                                               중고
+price                                               150000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/184874660
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 181, dtype: object>",https://www.hellomarket.com/item/184874660,150000,150000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                               업소용 냉동고
+manufacturer                                              
+model                                                     
+spec                                                      
+title                                             쇼케이스 냉동고
+condition                                               중고
+price                                               700000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/184541644
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 182, dtype: object>",https://www.hellomarket.com/item/184541644,700000,700000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                    TV
+manufacturer                                            lg
+model                                                     
+spec                                                      
+title                                 LG 70인치 4K UHD 스마트TV
+condition                                               중고
+price                                               790000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/185053500
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 183, dtype: object>",https://www.hellomarket.com/item/185053500,790000,790000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                          TV
+manufacturer                                                    
+model                                                   OLED83C1
+spec                                                            
+title           TV 스탠드 받침대 거치대 OLED83C1 다리 발판 /이동식 스마트 모니터 스탠바이미
+condition                                                     중고
+price                                                      90000
+currency                                                     KRW
+sale_status                                             for_sale
+price_basis                                               asking
+quantity                                                       1
+source                                                      헬로마켓
+url                   https://www.hellomarket.com/item/176028281
+collected_at                                          2026-11-13
+is_sample                                                  false
+Name: 185, dtype: object>",https://www.hellomarket.com/item/176028281,90000,90000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                    TV
+manufacturer                                              
+model                                                  UHD
+spec                                                  65인치
+title                                LG 삼성 65인치 UHD 스마트 TV
+condition                                               중고
+price                                               800000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/184922127
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 186, dtype: object>",https://www.hellomarket.com/item/184922127,800000,800000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                  커피머신
+manufacturer                                            씨메
+model                                                CO-05
+spec                                                   3그룹
+title                             씨메 CO-05 PID 커피머신 블랙 3그룹
+condition                                               중고
+price                                              2500000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/185033716
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 187, dtype: object>",https://www.hellomarket.com/item/185033716,2500000,2500000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                    TV
+manufacturer                                              
+model                                                     
+spec                                                  32인치
+title                                          스마트 티비 32인치
+condition                                               중고
+price                                               150000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/180893319
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 188, dtype: object>",https://www.hellomarket.com/item/180893319,150000,150000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                   블렌더
+manufacturer                                          다이나믹
+model                                                     
+spec                                                      
+title                                          다이나믹 업소용블렌더
+condition                                               중고
+price                                               150000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/184192170
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 189, dtype: object>",https://www.hellomarket.com/item/184192170,150000,150000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                   정수기
+manufacturer                                           코웨이
+model                                                     
+spec                                                      
+title                             코웨이 대용량 얼음정수기 저렴하게 판매합니다
+condition                                               중고
+price                                               270000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/174219913
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 190, dtype: object>",https://www.hellomarket.com/item/174219913,270000,270000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                   제빙기
+manufacturer                                         유니크대성
+model                                              UIM-50A
+spec                                                  50kg
+title                                       유니크대성 50kg 제빙기
+condition                                               중고
+price                                               500000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/184205255
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 191, dtype: object>",https://www.hellomarket.com/item/184205255,500000,500000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                               커피 그라인더
+manufacturer                                          다이나믹
+model                                               DAG-17
+spec                                                      
+title                                          다이나믹 커피그라인더
+condition                                               중고
+price                                               200000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/184160569
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 192, dtype: object>",https://www.hellomarket.com/item/184160569,200000,200000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                   제빙기
+manufacturer                                           카이저
+model                                             IMK-3700
+spec                                       수냉식 플레이크 약200kg
+title                                          카이저 업소용 제빙기
+condition                                               중고
+price                                               595000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/184503309
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 193, dtype: object>",https://www.hellomarket.com/item/184503309,595000,595000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                 식기세척기
+manufacturer                                              
+model                                                     
+spec                                                  29인치
+title                       LG 29인치 TV 모니터, 청호 식기세척기 판매합니다
+condition                                               중고
+price                                               100000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/184924733
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 194, dtype: object>",https://www.hellomarket.com/item/184924733,100000,100000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                              쇼케이스 냉장고
+manufacturer                                              
+model                                                     
+spec                                                      
+title                               까페냉장고 쇼케이스냉장고 제과 까페 케익
+condition                                               중고
+price                                               300000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/180065948
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 195, dtype: object>",https://www.hellomarket.com/item/180065948,300000,300000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                               커피 그라인더
+manufacturer                                        엔트프라이즈
+model                                                     
+spec                                                      
+title                                               커피그라인더
+condition                                               중고
+price                                               150000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/177306600
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 196, dtype: object>",https://www.hellomarket.com/item/177306600,150000,150000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                    TV
+manufacturer                                            삼성
+model                                                  UHD
+spec                                                  55인치
+title                             삼성 55인치 UHD 스마트 TV 폭탄 세일
+condition                                               중고
+price                                               390000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/177745568
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 197, dtype: object>",https://www.hellomarket.com/item/177745568,390000,390000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                  키오스크
+manufacturer                                          하나시스
+model                                               K215R2
+spec                                                      
+title                   하나시스 K215R2키오스크 무인키오스크 아이스크림매장키오스크
+condition                                               중고
+price                                              1350000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/185045355
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 198, dtype: object>",https://www.hellomarket.com/item/185045355,1350000,1350000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                   정수기
+manufacturer                                            쿠쿠
+model                                                     
+spec                                                      
+title                                                쿠쿠정수기
+condition                                               중고
+price                                               250000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/185142977
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 199, dtype: object>",https://www.hellomarket.com/item/185142977,250000,250000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                 식기세척기
+manufacturer                                         이오시스템
+model                                                     
+spec                                                      
+title                                      이오시스템 초음파 식기세척기
+condition                                               중고
+price                                               800000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/185108616
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 200, dtype: object>",https://www.hellomarket.com/item/185108616,800000,800000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                   제빙기
+manufacturer                                           카이저
+model                                                     
+spec                      확인불가: 제목100kg / 본문 일일92kg·저장50kg
+title                                        카이저 100kg 제빙기
+condition                                               중고
+price                                               300000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/184019186
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 201, dtype: object>",https://www.hellomarket.com/item/184019186,300000,300000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                   정수기
+manufacturer                                              
+model                                                  디오스
+spec                                                  824L
+title                    1644 엘지디오스 824L 4도어 정수기양문형냉장고(메탈)
+condition                                               중고
+price                                               480000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/184756190
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 202, dtype: object>",https://www.hellomarket.com/item/184756190,480000,480000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                   테이블
+manufacturer                                           유니크
+model                                                     
+spec                                                      
+title                                     유니크 업소용 테이블냉동 냉장
+condition                                               중고
+price                                               550000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/184797340
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 203, dtype: object>",https://www.hellomarket.com/item/184797340,550000,550000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                    TV
+manufacturer                                            삼성
+model                                           UN65RU7190
+spec                                                  65인치
+title                  삼성 65인치 UHD스마트TV UN65RU7190 가격 65만원
+condition                                               중고
+price                                               650000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/181555367
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 204, dtype: object>",https://www.hellomarket.com/item/181555367,650000,650000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                               커피 그라인더
+manufacturer                                           드롱기
+model                                                 KG79
+spec                                                      
+title                        (드롱기) KG79 커피그라인더 커피분쇄기 원두분쇄기
+condition                                               중고
+price                                                48000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/185186680
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 205, dtype: object>",https://www.hellomarket.com/item/185186680,48000,48000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                  커피머신
+manufacturer                                              
+model                                                     
+spec                                                      
+title                                             에스프레소 머신
+condition                                               중고
+price                                               800000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/185142963
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 206, dtype: object>",https://www.hellomarket.com/item/185142963,800000,800000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                   제빙기
+manufacturer                                            sk
+model                                                     
+spec                                                      
+title                                       SK제빙기 10만원에팝니다
+condition                                               중고
+price                                               100000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/181772865
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 207, dtype: object>",https://www.hellomarket.com/item/181772865,100000,100000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                               커피 그라인더
+manufacturer                                           플랜잇
+model                                                 브리티쉬
+spec                                                      
+title                                  플랜잇 브리티쉬 커피 그라인더 블루
+condition                                               중고
+price                                                10000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/185129697
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 208, dtype: object>",https://www.hellomarket.com/item/185129697,10000,10000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                              쇼케이스 냉장고
+manufacturer                                         한국yot
+model                                              RTW-99L
+spec                                                      
+title               한국YOT 사면유리 냉장쇼케이스 RTW-99L 카페 led 미니냉장고
+condition                                               중고
+price                                               350000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/185016725
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 209, dtype: object>",https://www.hellomarket.com/item/185016725,350000,350000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                   정수기
+manufacturer                                              
+model                                                     
+spec                                                      
+title                                   얼음정수기 중고,리퍼뷰 얼음정수기
+condition                                               중고
+price                                                22000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/176463596
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 210, dtype: object>",https://www.hellomarket.com/item/176463596,22000,22000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                 식기세척기
+manufacturer                                         매직코리아
+model                                                     
+spec                                                      
+title                                          매직코리아 식기세척기
+condition                                               중고
+price                                               750000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/184133307
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 211, dtype: object>",https://www.hellomarket.com/item/184133307,750000,750000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                               업소용 냉장고
+manufacturer                                              
+model                                                     
+spec                                                      
+title                                  수직냉동고 음료수냉장고 업소용냉장고
+condition                                               중고
+price                                               500000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/184084128
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 212, dtype: object>",https://www.hellomarket.com/item/184084128,500000,500000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                              쇼케이스 냉장고
+manufacturer                                              
+model                                                     
+spec                                                  1200
+title                           화이트 1200제과 쇼케이스 뒤문형 판매 합니다
+condition                                               중고
+price                                               800000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/184402213
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 213, dtype: object>",https://www.hellomarket.com/item/184402213,800000,800000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                               업소용 냉동고
+manufacturer                                              
+model                                                     
+spec                                                      
+title                                         업소용 쇼케이스 냉동고
+condition                                               중고
+price                                               700000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/184541650
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 214, dtype: object>",https://www.hellomarket.com/item/184541650,700000,700000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                               업소용 냉동고
+manufacturer                                           유니크
+model                                                     
+spec                                                      
+title                                      유니크 업소용 냉장, 냉동고
+condition                                               중고
+price                                               550000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/184075173
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 215, dtype: object>",https://www.hellomarket.com/item/184075173,550000,550000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                               업소용 냉동고
+manufacturer                                              
+model                                                     
+spec                                                      
+title                                         양문형 쇼케이스 냉동고
+condition                                               중고
+price                                              1800000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/184541636
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 216, dtype: object>",https://www.hellomarket.com/item/184541636,1800000,1800000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                   정수기
+manufacturer                                              
+model                                                     
+spec                                                      
+title                                         얼음정수기 판매 합니다
+condition                                               중고
+price                                               228000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/176463637
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 217, dtype: object>",https://www.hellomarket.com/item/176463637,228000,228000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                   제빙기
+manufacturer                                              
+model                                                     
+spec                                                      
+title                                                  제빙기
+condition                                               중고
+price                                               100000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/178108006
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 218, dtype: object>",https://www.hellomarket.com/item/178108006,100000,100000,판매 중 확인
+2026-11-14,"<bound method IndexOpsMixin.item of item                                                   정수기
+manufacturer                                              
+model                                                  디오스
+spec                                                  824L
+title                  1651 엘지디오스 824L 4도어 정수기양문형냉장고(메탈실버)
+condition                                               중고
+price                                               470000
+currency                                               KRW
+sale_status                                       for_sale
+price_basis                                         asking
+quantity                                                 1
+source                                                헬로마켓
+url             https://www.hellomarket.com/item/184871287
+collected_at                                    2026-11-13
+is_sample                                            false
+Name: 219, dtype: object>",https://www.hellomarket.com/item/184871287,470000,470000,판매 중 확인
