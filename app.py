@@ -17,6 +17,7 @@ import vision
 from box_selector import select_box, validated_box
 from inventory import inventory_rows
 from estimate_view import safe_estimate
+import presentation
 
 BASE = Path(__file__).parent
 load_dotenv(BASE / ".env")
@@ -25,6 +26,7 @@ MAX_RUNS_PER_SESSION = 10      # 링크 공개 시 무료 API 한도 보호
 MAX_UPLOAD_MB = 10
 
 st.set_page_config(page_title="이어가게", page_icon="🏪", layout="centered")
+presentation.apply_theme()
 
 
 MAX_RUNS_PER_DAY = 200         # 접속자 전체 합산 하루 상한 (무료 API 한도·서버 보호)
@@ -393,21 +395,30 @@ def apply_inventory_edit(last, rows, widget_key):
 
 
 def start_page():
-    st.header('남은 집기, 다음 가게로 이어주세요')
-    st.write('매장 사진을 올리면 AI가 집기를 정리합니다. 결과를 직접 고친 뒤 최종 목록을 확인하세요.')
-    st.markdown('**사진 입력 → AI 분석·직접 수정 → 최종 결과**')
-    upload, camera = st.columns(2)
-    if upload.button('📷 사진 올려 시작하기', type='primary', use_container_width=True):
-        st.session_state.input_method = '사진 올리기'
-        go_to(2)
-    if camera.button('📸 카메라로 시작하기', use_container_width=True):
-        st.session_state.input_method = '카메라로 찍기'
-        go_to(2)
-    if st.session_state.get('last') and st.button('이전 분석 이어서 수정하기'):
-        go_to(3)
+    with st.container(key='hero_layout'):
+        artwork, story = st.columns([1.05, 1], gap='large', vertical_alignment='center')
+        with artwork:
+            presentation.hero_visual()
+        with story:
+            presentation.section_label(1, '남은 집기의 다음 가능성')
+            st.header('남은 집기, 다음 가게로 이어주세요')
+            st.write('매장 사진을 올리면 AI가 집기를 정리합니다. 결과를 직접 고친 뒤 최종 목록을 확인하세요.')
+            presentation.service_facts()
+    presentation.start_chapter()
+    with st.container(key='start_actions'):
+        upload, camera = st.columns(2)
+        if upload.button('📷 사진 올려 시작하기', type='primary', use_container_width=True):
+            st.session_state.input_method = '사진 올리기'
+            go_to(2)
+        if camera.button('📸 카메라로 시작하기', use_container_width=True):
+            st.session_state.input_method = '카메라로 찍기'
+            go_to(2)
+        if st.session_state.get('last') and st.button('이전 분석 이어서 수정하기'):
+            go_to(3)
 
 
 def photo_page():
+    presentation.section_label(2, '사진 입력')
     st.header('사진을 준비해 주세요')
     st.caption('집기가 잘 보이도록 매장을 넓게 찍어 주세요. JPG·PNG, 최대 10MB')
     methods = ['사진 올리기', '카메라로 찍기']
@@ -490,6 +501,7 @@ def cached_estimate(name: str, manufacturer='', model='', spec='', condition='',
 
 
 def final_page(last):
+    presentation.section_label(4, '최종 분석 · 매각 견적')
     st.header('최종 분석 · 매각 견적')
     all_rows = inventory_rows(last)
     # Gemini 가 붙인 분류. 사용자가 새로 그린 박스나 바꾼 이름은 '집기'
@@ -509,17 +521,18 @@ def final_page(last):
     low = sum(e['low'] * r['개수'] for r, e in priced)
     mid = sum(e['mid'] * r['개수'] for r, e in priced)
     high = sum(e['high'] * r['개수'] for r, e in priced)
-    st.subheader('총 매각 예상 범위')
-    if priced:
-        st.markdown(f'### {low:,}원 ~ {high:,}원')
-        st.caption(f'중앙값 기준 {mid:,}원 · 가격 근거가 있는 {len(priced)}개 품목 그룹 합계')
-        if len(priced) < len(rows):
-            st.warning(f'부분 견적입니다. 가격 근거 부족 {len(rows) - len(priced)}개 품목 그룹은 합계에서 제외했습니다.')
-        if len({e['price_basis'] for _, e in priced}) > 1:
-            st.info('품목별 게시 가격과 공매 낙찰가 등 서로 다른 근거의 금액을 합산한 참고 합계입니다. 실제 매각액과 다를 수 있습니다.')
-    else:
-        st.markdown('### — 원 ~ — 원')
-        st.caption('가격 근거가 있는 품목이 없습니다. 아래 검색 링크로 직접 확인해 주세요.')
+    with st.container(key='estimate_summary'):
+        presentation.estimate_label()
+        if priced:
+            st.markdown(f'### {low:,}원 ~ {high:,}원')
+            st.caption(f'중앙값 기준 {mid:,}원 · 가격 근거가 있는 {len(priced)}개 품목 그룹 합계')
+            if len(priced) < len(rows):
+                st.warning(f'부분 견적입니다. 가격 근거 부족 {len(rows) - len(priced)}개 품목 그룹은 합계에서 제외했습니다.')
+            if len({e['price_basis'] for _, e in priced}) > 1:
+                st.info('품목별 게시 가격과 공매 낙찰가 등 서로 다른 근거의 금액을 합산한 참고 합계입니다. 실제 매각액과 다를 수 있습니다.')
+        else:
+            st.markdown('### — 원 ~ — 원')
+            st.caption('가격 근거가 있는 품목이 없습니다. 아래 검색 링크로 직접 확인해 주세요.')
     st.image(draw_boxes(last['image'], last['det']['objects'], last['box_names']),
              caption='수정 내용이 반영된 최종 분석 사진', use_container_width=True)
     st.subheader('최종 집기 목록')
@@ -581,24 +594,27 @@ def final_page(last):
         export = pd.concat([prices, pd.DataFrame([bundle])], ignore_index=True)
     st.download_button('최종 목록 CSV 내려받기', export.to_csv(index=False).encode('utf-8-sig'),
                        file_name='이어가게_최종목록.csv', mime='text/csv')
-    left, right = st.columns(2)
-    if left.button('← 분석 내용 다시 수정', use_container_width=True):
-        go_to(3)
-    if right.button('시작 화면으로', use_container_width=True):
-        go_to(1)
+    with st.container(key='page_actions'):
+        left, right = st.columns(2)
+        if left.button('← 분석 내용 다시 수정', use_container_width=True):
+            go_to(3)
+        if right.button('시작 화면으로', use_container_width=True):
+            go_to(1)
 
 
 def edit_screen():
     last = st.session_state.get('last')
     if not last:
         go_to(2)
+    presentation.section_label(3, '분석 결과 확인 · 직접 수정')
     edit_page(last)
     edit_inventory_table(last)
-    left, right = st.columns(2)
-    if left.button('← 사진 입력으로', use_container_width=True):
-        go_to(2)
-    if right.button('수정 완료 · 최종 견적 보기 →', type='primary', use_container_width=True):
-        go_to(4)
+    with st.container(key='page_actions'):
+        left, right = st.columns(2)
+        if left.button('← 사진 입력으로', use_container_width=True):
+            go_to(2)
+        if right.button('수정 완료 · 최종 견적 보기 →', type='primary', use_container_width=True):
+            go_to(4)
 
 
 def final_screen():
@@ -614,13 +630,12 @@ PAGES = [st.Page(start_page, title='시작', default=True),
          st.Page(edit_screen, title='분석·수정', url_path='edit'),
          st.Page(final_screen, title='최종 견적', url_path='estimate')]
 navigation = st.navigation(PAGES, position='hidden')
-st.title('🏪 이어가게')
-st.caption('매장 사진 한 장으로 남은 집기를 정리하고, 다음 가게로 이어줍니다.')
+presentation.masthead()
 st.session_state.setdefault('runs', 0)
 steps = ['시작', '사진 입력', '분석·수정', '최종 견적']
 step = steps.index(navigation.title) + 1
-st.caption('  →  '.join(f'● {name}' if i == step else name for i, name in enumerate(steps, 1)))
-st.progress(step / 4, text=f'{step} / 4 · {steps[step - 1]}')
-navigation.run()
-st.divider()
+presentation.stage_navigation(step, steps)
+with st.container(key=f'page_{step}'):
+    navigation.run()
+presentation.footer()
 st.caption('사진과 수정 내용은 현재 세션에서만 사용하며, 새로고침하거나 접속을 종료하면 초기화될 수 있습니다.')
