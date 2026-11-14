@@ -479,12 +479,12 @@ def photo_page():
 
 def edit_inventory_table(last):
     st.subheader('집기 목록 수정')
-    st.caption('제조사·모델명은 AI가 팀 조사 시세표의 후보 중에서 예측한 값입니다 (로고가 안 보이면 형태로 예측). 틀리면 직접 고쳐 주세요. 집기명·제조사·모델명·사양·상태를 수정할 수 있습니다. 사양은 용량·그룹 수 등으로 입력하고, 모르는 정보는 비워 두세요. 개수는 박스 추가·삭제에 맞춰 자동으로 계산됩니다.')
+    st.caption('제조사·모델명은 AI가 팀 조사 시세표의 후보 중에서 예측한 값입니다 (로고가 안 보이면 형태로 예측). 틀리면 직접 고쳐 주세요. 집기명·제조사·모델명·상태를 수정할 수 있습니다. 모르는 정보는 비워 두세요. 개수는 박스 추가·삭제에 맞춰 자동으로 계산됩니다.')
     rows = inventory_rows(last)
     if not rows:
         st.info('목록이 비어 있습니다. 사진에서 영역을 지정해 물건을 추가할 수 있습니다.')
         return
-    table = pd.DataFrame([{k: row.get(k, '') for k in ('집기명', '제조사', '개수', '모델명', '사양', '상태')} for row in rows])
+    table = pd.DataFrame([{k: row.get(k, '') for k in ('집기명', '제조사', '개수', '모델명', '상태')} for row in rows])
     widget_key = f"inventory_{last['key']}_{last.get('table_revision', 0)}"
     st.data_editor(table, hide_index=True, use_container_width=True, num_rows='fixed',
                    disabled=['개수'], key=widget_key, on_change=apply_inventory_edit,
@@ -536,7 +536,7 @@ def final_page(last):
     st.image(draw_boxes(last['image'], last['det']['objects'], last['box_names']),
              caption='수정 내용이 반영된 최종 분석 사진', use_container_width=True)
     st.subheader('최종 집기 목록')
-    columns = ['집기명', '제조사', '개수', '모델명', '사양', '상태']
+    columns = ['집기명', '제조사', '개수', '모델명', '상태']  # 사양 칸은 화면에서 제거 (2026-11-14, 내부 값은 모델명에서 자동 추출)
     table = pd.DataFrame([{k: row.get(k, '') for k in columns} for row in rows], columns=columns)
     edited = last.get('edited_makers', set())
     basis = last.get('brand_basis', {})
@@ -574,7 +574,7 @@ def final_page(last):
     })
     st.caption('현재 가격은 팀 조사 시세표(품목·제조사·대표 모델별 중고 시세 범위)에서만 냅니다. 모델 → 제조사 → 품목 평균 순서로 찾으며, 개별 매물 원문 링크가 없는 조사값이라 실제 매각액과 다를 수 있습니다. 개당 Q1(25%)·중앙값·Q3(75%) × 수량으로 계산합니다. 유효 표본 3건 미만은 가격 근거 부족으로 표시합니다. '
                'DB는 최근 180일의 실제 개별 매물만 사용하며 샘플·묶음은 제외합니다. '
-               '제조사·모델·사양이 없으면 신뢰도가 낮은 참고 시세입니다. 판매 완료 게시 가격도 실제 거래액을 보장하지 않습니다. '
+               '제조사·모델이 없으면 신뢰도가 낮은 참고 시세입니다. 판매 완료 게시 가격도 실제 거래액을 보장하지 않습니다. '
                '보조 온비드 기록은 최근 2년의 공매 낙찰가로 일반 중고 시세보다 낮을 수 있습니다.')
     with st.expander('가격 근거 보기 (출처·원본 매물·수집일)'):
         ev = [{'집기명': r['집기명'], '입력 제조사': r['제조사'], **record}
