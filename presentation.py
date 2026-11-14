@@ -39,7 +39,7 @@ def hero_visual():
 def service_facts():
     st.html('''<div class="fs-stats" aria-label="서비스 이용 흐름">
       <div class="fs-stat"><strong>사진 1장</strong><span>매장의 집기를 한눈에</span></div>
-      <div class="fs-stat"><strong>04 단계</strong><span>촬영부터 최종 목록까지</span></div>
+      <div class="fs-stat"><strong>05 단계</strong><span>사진부터 판매 준비까지</span></div>
     </div>''')
 
 

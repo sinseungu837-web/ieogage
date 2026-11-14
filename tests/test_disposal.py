@@ -68,7 +68,7 @@ class DisposalTest(unittest.TestCase):
         import llm
         self.state.update(price=123000, notes='긁힘 있음', accessories='전원선')
         titles, facts = sale_facts(self.rows[0], self.state)
-        with patch.object(llm, '_generate', return_value=SimpleNamespace(text=json.dumps(
+        with patch.object(llm, 'get_api_key', return_value='mock'), patch.object(llm, '_generate', return_value=SimpleNamespace(text=json.dumps(
                 {'title_index': 1, 'sentence_order': list(reversed(range(len(facts))))}))) as call:
             draft = llm.generate_sale_post(self.rows[0], self.state)
         self.assertIn('123,000원', draft['body'])
@@ -93,6 +93,11 @@ if st.checkbox('결과 화면 표시', value=True):
     disposal_view.results(last, rows, estimates, states)
 ''' % ROWS).run()
 
+    def set_method(self, page, method):
+        from disposal_view import apply_selection_edits
+        apply_selection_edits(page.session_state['last'], ['1,2', '3'], {0: {'처분 방식': method}})
+        page.run()
+
     def test_select_edit_regenerate_preserve_and_failure(self):
         import llm
         page = self.page()
@@ -101,15 +106,15 @@ if st.checkbox('결과 화면 표시', value=True):
         self.assertEqual(page.metric[0].value, '0')
         page.button[0].click().run()
         self.assertEqual(page.metric[0].value, '200')
-        page.selectbox[0].select('개인 중고거래').run()
+        self.set_method(page, '개인 중고거래')
         with patch.object(llm, 'generate_sale_post', return_value={'title': '초안', 'body': '본문'}):
             page.button(key='sale:fixture:1,2:generate').click().run()
         page.text_input(key='sale:fixture:1,2:title').input('내가 수정').run()
         page.checkbox[-1].uncheck().run()
         page.checkbox[-1].check().run()
         self.assertEqual(page.text_input[0].value, '내가 수정')
-        page.selectbox[0].select('전문업체 매각').run()
-        page.selectbox[0].select('개인 중고거래').run()
+        self.set_method(page, '전문업체 매각')
+        self.set_method(page, '개인 중고거래')
         self.assertEqual(page.text_input[0].value, '내가 수정')
         with patch.object(llm, 'generate_sale_post', return_value={'title': '새 초안', 'body': '새 본문'}):
             page.button(key='sale:fixture:1,2:generate').click().run()
@@ -125,3 +130,51 @@ if st.checkbox('결과 화면 표시', value=True):
         self.assertEqual(page.text_input[0].value, '새 초안')
         self.assertNotIn('private key', page.error[0].value)
         self.assertFalse(page.exception)
+
+
+class MobileRegressionTest(unittest.TestCase):
+    def test_editor_updates_by_snapshot_identity(self):
+        from disposal_view import apply_selection_edits
+        last = {}
+        states = sync_states(last, ROWS)
+        apply_selection_edits(last, ['3', '1,2'], {0: {'대상': False, '처분 방식': '전문업체 매각'}})
+        self.assertFalse(states['3']['selected'])
+        self.assertEqual(states['3']['method'], '전문업체 매각')
+        self.assertTrue(states['1,2']['selected'])
+        # 삭제된 행 및 잘못된 선택은 무시한다.
+        sync_states(last, ROWS[:1])
+        apply_selection_edits(last, ['3', '1,2'], {0: {'대상': True}, 1: {'처분 방식': 'invalid'}})
+        self.assertEqual(last['disposal']['1,2']['method'], '미선택')
+        self.assertNotIn('3', last['disposal'])
+
+    def test_sale_empty_and_invalid_responses(self):
+        import llm
+        state = sync_states({}, ROWS)['1,2']
+        with patch.object(llm, 'get_api_key', return_value='mock'):
+            for text in (None, '', 'not json', '{"title_index":0,"sentence_order":[0,0]}'):
+                with patch.object(llm, '_generate', return_value=SimpleNamespace(text=text)):
+                    with self.assertRaises(ValueError):
+                        llm.generate_sale_post(ROWS[0], state)
+
+    def test_safe_error_messages_and_missing_key(self):
+        import llm
+        for code in (400, 401, 403, 404, 429, 500, 503, 504):
+            error = RuntimeError('SECRET URL KEY')
+            error.code = code
+            message = llm.sale_error_message(error)
+            self.assertIn(str(code), message)
+            self.assertNotIn('SECRET', message)
+        with patch.object(llm, 'get_api_key', return_value=None), patch.object(llm, '_generate') as call:
+            with self.assertRaises(llm.SaleConfigurationError):
+                llm.generate_sale_post(ROWS[0], sync_states({}, ROWS)['1,2'])
+            call.assert_not_called()
+
+    def test_sales_retry_is_bounded_without_changing_detection_plan(self):
+        import llm
+        from google.genai.errors import ServerError
+        client = SimpleNamespace(models=SimpleNamespace(generate_content=unittest.mock.Mock(
+            side_effect=ServerError(503, {'error': {'message': 'busy', 'status': 'UNAVAILABLE'}}))))
+        with patch.object(llm, '_client', return_value=client), patch('time.sleep'):
+            with self.assertRaises(ServerError):
+                llm._generate(model=llm.DEFAULT_MODEL, contents='test', max_attempts=2)
+        self.assertEqual(client.models.generate_content.call_count, 2)

@@ -30,13 +30,14 @@ with sync_playwright() as p:
    editor=page.locator('[data-testid="stDataFrame"]')
    editor.scroll_into_view_if_needed()
    canvas=editor.locator('.dvn-scroller').first
-   canvas.dblclick(position={'x':200,'y':52})
+   canvas.dblclick(position={'x':300,'y':52})
    field=page.locator('textarea.gdg-input');field.fill('Acme');field.press('Enter')
    page.wait_for_timeout(800)
    canvas.dblclick(position={'x':80,'y':52})
    field=page.locator('textarea.gdg-input');field.fill('Office chair');field.press('Enter')
    page.wait_for_timeout(800)
-  page.get_by_role('button',name='수정 완료 · 최종 견적 보기 →',exact=True).click()
+  page.get_by_role('button',name='수정 완료 · 처분 계획 →',exact=True).click()
+  page.get_by_role('button',name='최종 견적 보기 →',exact=True).click()
   page.get_by_role('heading',name='물품별 가격 · 시세',exact=True).wait_for()
   expect(page).to_have_url(re.compile(r'/estimate$'))
   page.get_by_role('heading',name='— 원 ~ — 원',exact=True).wait_for()
@@ -47,13 +48,17 @@ with sync_playwright() as p:
   row = list(csv.DictReader(io.StringIO(text)))[0]
   expected = ('의자', '미확인') if mobile else ('Office chair', 'Acme')
   assert (row['집기명'], row['제조사']) == expected, text
-  assert row['개수'] == '1' and row['개당 대표 가격 (원)'] == '', text
-  page.get_by_role('button',name='← 분석 내용 다시 수정',exact=True).click()
+  assert row['개수'] == '1' and row['개당 예상 중고가 (원)'] == '', text
+  page.get_by_role('button',name='판매 준비 →',exact=True).click()
+  expect(page).to_have_url(re.compile(r'/sale$'))
+  page.get_by_role('button',name='처분 계획 수정',exact=True).click()
+  page.get_by_role('button',name='← 분석·수정',exact=True).click()
   page.get_by_text('집기 목록 수정',exact=True).wait_for()
   page.get_by_role('button',name='← 사진 입력으로',exact=True).click()
   page.get_by_role('button',name='분석 결과 이어보기',exact=True).click()
   page.get_by_text('집기 목록 수정',exact=True).wait_for()
-  page.get_by_role('button',name='수정 완료 · 최종 견적 보기 →',exact=True).click()
+  page.get_by_role('button',name='수정 완료 · 처분 계획 →',exact=True).click()
+  page.get_by_role('button',name='최종 견적 보기 →',exact=True).click()
   with page.expect_download() as download:
    page.get_by_role('button',name='최종 목록 CSV 내려받기',exact=True).click()
   row = list(csv.DictReader(io.StringIO(download.value.path().read_text(encoding='utf-8-sig'))))[0]

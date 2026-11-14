@@ -12,26 +12,48 @@ def field(state, field_name, widget, label, prefix, **kwargs):
     return widget(label, key=key, on_change=save, **kwargs)
 
 
+def apply_selection_edits(last, keys, edits):
+    states = last.get('disposal', {})
+    for index, fields in edits.items():
+        index = int(index)
+        if not 0 <= index < len(keys) or keys[index] not in states:
+            continue
+        state = states[keys[index]]
+        if type(fields.get('대상')) is bool:
+            state['selected'] = fields['대상']
+        if fields.get('처분 방식') in METHODS:
+            state['method'] = fields['처분 방식']
+
+
 def selection(last, rows):
     states = sync_states(last, rows)
     st.subheader('처분 대상 · 방식 선택')
-    st.caption('해제한 물품과 기존 시세는 보존됩니다. 묶음 구성이 바뀌면 공통된 처분 선택은 이어받고 판매글은 새로 작성합니다. 이전 초안은 보관됩니다.')
-    left, right = st.columns(2)
-    if left.button('전체 선택'):
-        for state in states.values():
-            state['selected'] = True
-    if right.button('전체 해제'):
-        for state in states.values():
-            state['selected'] = False
-    for row in rows:
-        key = row_key(row)
-        state = states[key]
-        prefix = f"disposal:{last.get('key', 'current')}:{key}"
+    st.caption('같은 행에서 대상과 방식을 선택하세요. 미선택 방식도 견적에 포함되며, 체크를 해제해도 물품은 보존됩니다.')
+    with st.container(key='disposal_actions'):
         left, right = st.columns(2)
-        with left:
-            field(state, 'selected', st.checkbox, f"{row['집기명']} · {row.get('제조사', '')} {row.get('모델명', '')} · {row['개수']}개", prefix)
-        with right:
-            field(state, 'method', st.selectbox, '처분 방식', prefix, options=METHODS, disabled=not state['selected'])
+        for button, label, selected in ((left, '전체 선택', True), (right, '전체 해제', False)):
+            if button.button(label):
+                for state in states.values():
+                    state['selected'] = selected
+                last['disposal_revision'] = last.get('disposal_revision', 0) + 1
+    if not rows:
+        st.info('처분할 집기가 없습니다. 분석·수정 단계에서 물품을 추가해 주세요.')
+        return states
+    keys = [row_key(row) for row in rows]
+    table = pd.DataFrame([{'대상': states[key]['selected'], '물품명': row['집기명'],
+                           '수량': row['개수'], '처분 방식': states[key]['method']}
+                          for row, key in zip(rows, keys)])
+    # 콜백이 받은 행 ID 스냅샷을 사용한다. 정렬·이름 변경 후 행 번호로 다른 물품을 수정하지 않는다.
+    widget_key = f"plan:{last.get('key', 'current')}:{last.get('disposal_revision', 0)}:{keys!r}"
+    def save():
+        apply_selection_edits(last, keys, st.session_state[widget_key].get('edited_rows', {}))
+        last['disposal_revision'] = last.get('disposal_revision', 0) + 1
+    st.data_editor(table, hide_index=True, use_container_width=True, num_rows='fixed',
+        key=widget_key, on_change=save, disabled=['물품명', '수량'], row_height=44,
+        column_config={'대상': st.column_config.CheckboxColumn('대상', width=60, required=True),
+                       '물품명': st.column_config.TextColumn(width=80),
+                       '수량': st.column_config.NumberColumn(width=48),
+                       '처분 방식': st.column_config.SelectboxColumn(options=METHODS, width=108, required=True)})
     return states
 
 
@@ -47,8 +69,8 @@ def editor(last, row, estimate, state):
         st.info('참고 시세가 없습니다. 희망가격을 직접 입력하거나 미정으로 남겨 주세요.')
     field(state, 'price', st.number_input, '희망 판매가격 (전체 수량 합계·원)', prefix, min_value=0, step=1000)
     field(state, 'condition', st.selectbox, '작동 상태', prefix, options=('작동 여부 미확인', '정상 작동', '일부 수리 필요'))
-    field(state, 'notes', st.text_area, '외관 상태·특이사항 (선택)', prefix)
-    field(state, 'accessories', st.text_area, '구성품·추가 정보 (선택)', prefix)
+    field(state, 'notes', st.text_area, '외관 상태·특이사항 (선택)', prefix, height=80)
+    field(state, 'accessories', st.text_area, '구성품·추가 정보 (선택)', prefix, height=80)
     current = fingerprint(row, state, estimate)
     if state['generated_for'] and current != state['generated_for']:
         st.warning('물품 정보 또는 판매 조건이 변경되었습니다. 기존 글을 확인하거나 재생성해 주세요.')
@@ -60,8 +82,8 @@ def editor(last, row, estimate, state):
                 state['candidate'] = dict(draft, generated_for=current)
             else:
                 state.update(draft, generated_for=current)
-        except Exception:
-            st.error('판매글을 생성하지 못했습니다. API 설정·사용량을 확인한 뒤 다시 시도해 주세요. 기존 글은 보존됩니다.')
+        except Exception as exc:
+            st.error(llm.sale_error_message(exc) + ' 기존 글은 보존됩니다.')
     candidate = state['candidate']
     if candidate:
         st.info('새 초안입니다. 적용할 때만 현재 편집 내용을 바꿉니다.')
@@ -104,7 +126,9 @@ def results(last, rows, estimates, states):
                 st.info('무료 나눔의 현금 회수액은 0원입니다. 아래 금액은 물품의 참고 가치입니다.')
             table = pd.DataFrame([{**{k: r.get(k, '') for k in ('집기명', '제조사', '모델명', '개수', '연식(년)')},
                 '개당 참고 시세 (원)': lookup[row_key(r)]['mid']} for r in items])
-            st.dataframe(table, hide_index=True, use_container_width=True)
+            st.dataframe(table[['집기명', '개수', '개당 참고 시세 (원)']], hide_index=True, use_container_width=True)
+            with st.expander('제조사·모델·연식 상세 목록'):
+                st.dataframe(table, hide_index=True, use_container_width=True)
             st.download_button('물품 목록 CSV 내려받기', table.to_csv(index=False).encode('utf-8-sig'),
                 file_name=f'이어가게_{method}.csv', key='export:' + method)
             if method == '개인 중고거래':
