@@ -2,13 +2,13 @@
 <html lang="ko">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-body { margin:0; font-family:sans-serif; }
+body { margin:0; font-family:"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif; color:#171916; background:#f4f2eb; }
 #surface { position:relative; width:100%; user-select:none; -webkit-user-select:none; }
 img { display:block; width:100%; pointer-events:none; }
 #surface.draw { touch-action:none; cursor:crosshair; }
 #surface:not(.draw) { touch-action:pan-y; cursor:pointer; }
 #box { position:absolute; box-sizing:border-box; border:3px solid #00b85c; background:#00e67622; pointer-events:none; display:none; }
-#status { font-size:13px; color:#666; margin:6px 0; }
+#status { font-size:12px; line-height:1.65; color:#656861; margin:9px 0; }
 </style></head>
 <body><div id="surface" role="img" aria-label="집기 사진. 영역 선택 모드에서는 마우스나 손가락으로 드래그하세요."><img id="photo" alt="인식된 집기 사진" draggable="false"><div id="box"></div></div><p id="status" aria-live="polite"></p>
 <script>
