@@ -424,3 +424,16 @@ def _apply(item, members, brand):
             o["brand_basis"] = "형태 예측"
         o["brand"], o["model"] = brand, model
         o["spec"] = ",".join(m.replace(" ", "") for m in re.findall(r"\d+\s*그룹|\d+\s*kg|\d+\s*평형", model, re.I))
+
+
+def generate_sale_post(row, state, model=None):
+    """기존 Gemini 클라이언트/모델 사용. 근거 문장 밖의 출력은 조립하지 않는다."""
+    from disposal import sale_facts, validate_draft
+    titles, facts = sale_facts(row, state)
+    response = _generate(
+        model=_model(model),
+        contents=json.dumps({'titles': titles, 'sentences': facts}, ensure_ascii=False),
+        config=types.GenerateContentConfig(
+            system_instruction=(Path(__file__).parent / 'prompts/sale_post_v1.md').read_text(encoding='utf-8'),
+            temperature=0, response_mime_type='application/json'))
+    return validate_draft(json.loads(response.text), titles, facts)

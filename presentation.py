@@ -54,4 +54,4 @@ def footer():
 
 
 def estimate_label():
-    st.html('<p class="fs-total-label">총 매각 예상 범위</p>')
+    st.html('<p class="fs-total-label">선택한 물품의 참고 중고 가치 합계</p>')

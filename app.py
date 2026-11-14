@@ -16,6 +16,8 @@ import vision
 
 from box_selector import select_box, validated_box
 from inventory import inventory_rows
+import disposal_view
+from disposal import row_key
 from estimate_view import safe_estimate
 import presentation
 
@@ -501,8 +503,8 @@ def cached_estimate(name: str, manufacturer='', model='', spec='', condition='',
 
 
 def final_page(last):
-    presentation.section_label(4, '최종 분석 · 매각 견적')
-    st.header('최종 분석 · 매각 견적')
+    presentation.section_label(4, '최종 분석 · 처분 준비')
+    st.header('최종 분석 · 처분 준비')
     all_rows = inventory_rows(last)
     # Gemini 가 붙인 분류. 사용자가 새로 그린 박스나 바꾼 이름은 '집기'
     category = {it['name']: it.get('category', '집기') for it in last.get('result', {}).get('items', [])}
@@ -513,32 +515,39 @@ def final_page(last):
     # 재고·소모품·장식은 가격 조회 없이 '묶음 1건'으로 따로 표시 (총액 제외)
     supplies = [r for r in all_rows if r['분류'] in ('재고·소모품', '기타')]
     rows = [r for r in all_rows if r not in fixed and r not in supplies]
+    disposal_states = disposal_view.selection(last, rows)
     estimates = []
     with st.spinner('저장된 가격 DB와 보조 공매 기록을 확인하는 중...'):
         for row in rows:
             estimates.append(safe_estimate(row, price, cached_estimate))
-    priced = [(r, e) for r, e in zip(rows, estimates) if e['mid'] is not None]
+    priced = [(r, e) for r, e in zip(rows, estimates) if e['mid'] is not None and disposal_states[row_key(r)]['selected']]
     low = sum(e['low'] * r['개수'] for r, e in priced)
     mid = sum(e['mid'] * r['개수'] for r, e in priced)
     high = sum(e['high'] * r['개수'] for r, e in priced)
+    selected_count = sum(s['selected'] for s in disposal_states.values())
     with st.container(key='estimate_summary'):
         presentation.estimate_label()
         if priced:
             # 최종 가격 하나만 크게 (계산 과정은 아래 '계산 과정·근거 보기'에서 원할 때만)
             st.markdown(f'### {mid:,}원')
             st.caption(f'가격이 나온 {len(priced)}개 품목 그룹의 예상 중고가 × 개수 합계 · 시세 및 판매처에 따라 차이가 있을 수 있습니다.')
-            if len(priced) < len(rows):
-                st.warning(f'부분 견적입니다. 가격 근거 부족 {len(rows) - len(priced)}개 품목 그룹은 합계에서 제외했습니다.')
+            if len(priced) < selected_count:
+                st.warning(f'부분 견적입니다. 가격 근거 부족 {selected_count - len(priced)}개 품목 그룹은 합계에서 제외했습니다.')
             if len({e['price_basis'] for _, e in priced}) > 1:
                 st.info('품목별 게시 가격과 공매 낙찰가 등 서로 다른 근거의 금액을 합산한 참고 합계입니다. 실제 매각액과 다를 수 있습니다.')
+        elif selected_count == 0:
+            st.markdown('### 0원')
+            st.caption('선택한 처분 대상이 없습니다.')
         else:
             st.markdown('### — 원 ~ — 원')
             st.caption('가격 근거가 있는 품목이 없습니다. 아래 검색 링크로 직접 확인해 주세요.')
+    st.caption('합계는 선택한 물품의 참고 가치이며, 실제 현금 회수 예상액이 아닙니다. 양도·나눔 물품의 가치도 포함됩니다.')
     st.image(draw_boxes(last['image'], last['det']['objects'], last['box_names']),
              caption='수정 내용이 반영된 최종 분석 사진', use_container_width=True)
     st.subheader('최종 집기 목록')
     columns = ['집기명', '제조사', '개수', '모델명', '연식(년)']  # 사양 칸은 화면에서 제거 (2026-11-14, 내부 값은 모델명에서 자동 추출)
     table = pd.DataFrame([{k: row.get(k, '') for k in columns} for row in rows], columns=columns)
+    table['처분 대상'] = [disposal_states[row_key(r)]['selected'] for r in rows]
     edited = last.get('edited_makers', set())
     basis = last.get('brand_basis', {})
     table['제조사 근거'] = ['사용자 입력' if any(i in edited for i in r['box_ids']) else
@@ -550,17 +559,17 @@ def final_page(last):
                    + ' (떼어 팔 수 있다면 3단계에서 이름을 바꿔 주세요)')
     if supplies:
         st.subheader('재고·소모품 묶음')
-        st.caption('컵·원두·병 음료·소품 등은 개별 시세 대신 묶음 1건으로 정리합니다. 총 매각액에는 포함하지 않습니다.')
+        st.caption('컵·원두·병 음료·소품 등은 개별 시세 대신 묶음 1건으로 정리합니다. 참고 가치 합계에는 포함하지 않습니다.')
         st.dataframe(pd.DataFrame([{'품목': r['집기명'], '개수': r['개수'], '분류': r['분류']} for r in supplies]),
                      hide_index=True, use_container_width=True)
     st.subheader('물품별 가격 · 시세')
     e = estimates
     prices = table[['집기명', '제조사', '개수', '모델명', '연식(년)']].copy()
     prices['개당 예상 중고가 (원)'] = [x['mid'] for x in e]
-    prices['예상 매각액 (원)'] = [x['mid'] * c if x['mid'] is not None else None for x, c in zip(e, prices['개수'])]
+    prices['수량별 참고 가치 (원)'] = [x['mid'] * c if x['mid'] is not None else None for x, c in zip(e, prices['개수'])]
     money = st.column_config.NumberColumn(format='localized')  # 6,000,000 처럼 3자리마다 쉼표
     st.dataframe(prices, hide_index=True, use_container_width=True,
-                 column_config={'개당 예상 중고가 (원)': money, '예상 매각액 (원)': money})
+                 column_config={'개당 예상 중고가 (원)': money, '수량별 참고 가치 (원)': money})
     st.caption('시세 및 판매처에 따라 차이가 있을 수 있습니다.')
     with st.expander('계산 과정·근거 보기'):
         for r, x in zip(rows, e):
@@ -587,11 +596,14 @@ def final_page(last):
                      column_config={'url': st.column_config.LinkColumn('원본 매물/검색', display_text='보기'),
                                     'price': st.column_config.NumberColumn('가격 (원)', format='localized'),
                                     '낙찰가': st.column_config.NumberColumn('낙찰가 (원)', format='localized')})
-    export = prices
+    disposal_view.results(last, rows, estimates, disposal_states)
+    export = prices.copy()
+    export['처분 대상'] = [disposal_states[row_key(r)]['selected'] for r in rows]
+    export['처분 방식'] = [disposal_states[row_key(r)]['method'] for r in rows]
     if supplies:
         bundle = {'집기명': '재고·소모품 묶음 (' + ', '.join(f"{r['집기명']} {r['개수']}" for r in supplies) + ')',
                   '개수': 1, '근거': '총액 제외'}
-        export = pd.concat([prices, pd.DataFrame([bundle])], ignore_index=True)
+        export = pd.concat([export, pd.DataFrame([bundle])], ignore_index=True)
     st.download_button('최종 목록 CSV 내려받기', export.to_csv(index=False).encode('utf-8-sig'),
                        file_name='이어가게_최종목록.csv', mime='text/csv')
     with st.container(key='page_actions'):
