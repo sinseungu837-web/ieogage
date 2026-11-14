@@ -295,7 +295,9 @@ def service_estimate(name: str, manufacturer='', model='', spec='', condition=''
     """앱이 쓰는 가격 조회. 시세표 모드면 팀 조사 시세표만, 아니면 기존 DB·실시간·공매 경로."""
     if REFERENCE_ONLY:
         import reference
-        return reference.estimate(name, manufacturer, model, spec) or empty_estimate(name, '팀 조사 시세표에 없는 품목')
+        # 3단계 표의 '연식(년)' 값이 condition 으로 들어온다
+        return (reference.estimate(name, manufacturer, model, spec, reference.parse_years(condition))
+                or empty_estimate(name, '팀 조사 시세표에 없는 품목'))
     return estimate(name, manufacturer, model, spec, condition)
 
 

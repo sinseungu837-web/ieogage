@@ -126,3 +126,29 @@ class CountModeTest(unittest.TestCase):
 
     def test_all_mode_keeps_everything_but_exact_double(self):
         self.assertEqual(self.run_detect('all'), 3)
+
+
+class AgePriceTest(unittest.TestCase):
+    def test_example_from_team_doc(self):
+        value, steps = reference.age_price(3_500_000, 4)  # 350만 원 머신 4년 사용
+        self.assertEqual(value, 1_715_000)                # 350 → 245(개봉 -30%) → -73.5(3년×10%)
+        self.assertEqual(len(steps), 3)
+
+    def test_floor_and_new(self):
+        self.assertEqual(reference.age_price(1_000_000, 0.5)[0], 700_000)
+        self.assertEqual(reference.age_price(1_000_000, 30)[0], 100_000)  # 최저 10%
+
+    def test_parse_years(self):
+        self.assertEqual(reference.parse_years('3년'), 3.0)
+        self.assertEqual(reference.parse_years('1년 미만'), 0.5)
+        self.assertIsNone(reference.parse_years(''))
+
+    def test_estimate_with_years_single_price_and_calc(self):
+        e = reference.estimate('커피머신', '누오바 시모넬리', '', '', 4)
+        self.assertEqual(e['low'], e['high'])
+        self.assertTrue(any('개봉 감가' in s for s in e['calc']))
+
+    def test_no_new_price_falls_back_with_note(self):
+        e = reference.estimate('의자', '톨릭스', '', '', 3)
+        self.assertEqual(e['mid'], 50000)
+        self.assertIn('신품가 미조사', e['calc'][0])

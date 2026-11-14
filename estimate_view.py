@@ -23,6 +23,8 @@ def normalize_estimate(name, result):
     if not isinstance(result, dict):
         raise ValueError('가격 결과 형식 오류')
     normalized = unavailable_estimate(name)
+    if isinstance(result.get('calc'), list):
+        normalized['calc'] = [str(x) for x in result['calc']]  # 계산 과정 문구 (원할 때만 펼쳐 보기)
     for key in ('source', 'search_url', 'collected_at', 'match', 'confidence', 'price_basis'):
         value = result.get(key)
         if isinstance(value, str) and value:
@@ -69,7 +71,7 @@ def safe_estimate(row, backend, lookup):
         _log_failure('db_revision', backend, exc)
     try:
         result = lookup(name, row.get('제조사', ''), row.get('모델명', ''),
-                        row.get('사양', ''), row.get('상태', ''), revision)
+                        row.get('사양', ''), row.get('연식(년)', ''), revision)
         return normalize_estimate(name, result)
     except Exception as exc:
         _log_failure('estimate', backend, exc)

@@ -389,7 +389,7 @@ def apply_inventory_edit(last, rows, widget_key):
             if maker != row['제조사']:
                 last.setdefault('edited_makers', set()).add(oid)  # 화면에 '사용자 입력'으로 표시
             last.setdefault('manufacturers', {})[oid] = maker if maker != '미확인' else ''
-            for column, key in (('모델명', 'models'), ('사양', 'specs'), ('상태', 'conditions')):
+            for column, key in (('모델명', 'models'), ('사양', 'specs'), ('연식(년)', 'conditions')):
                 last.setdefault(key, {})[oid] = str(fields.get(column, row.get(column, '')) or '').strip()
     last['table_revision'] = last.get('table_revision', 0) + 1
 
@@ -479,12 +479,12 @@ def photo_page():
 
 def edit_inventory_table(last):
     st.subheader('집기 목록 수정')
-    st.caption('제조사·모델명은 AI가 팀 조사 시세표의 후보 중에서 예측한 값입니다 (로고가 안 보이면 형태로 예측). 틀리면 직접 고쳐 주세요. 집기명·제조사·모델명·상태를 수정할 수 있습니다. 모르는 정보는 비워 두세요. 개수는 박스 추가·삭제에 맞춰 자동으로 계산됩니다.')
+    st.caption('제조사·모델명은 AI가 팀 조사 시세표의 후보 중에서 예측한 값입니다 (로고가 안 보이면 형태로 예측). 틀리면 직접 고쳐 주세요. 집기명·제조사·모델명을 수정할 수 있습니다. **연식(년)** 칸에 몇 년 사용했는지 숫자로 적으면 신품가에서 연식만큼 감가한 중고가를 계산합니다 (1년 미만은 0.5). 개수는 박스 추가·삭제에 맞춰 자동으로 계산됩니다.')
     rows = inventory_rows(last)
     if not rows:
         st.info('목록이 비어 있습니다. 사진에서 영역을 지정해 물건을 추가할 수 있습니다.')
         return
-    table = pd.DataFrame([{k: row.get(k, '') for k in ('집기명', '제조사', '개수', '모델명', '상태')} for row in rows])
+    table = pd.DataFrame([{k: row.get(k, '') for k in ('집기명', '제조사', '개수', '모델명', '연식(년)')} for row in rows])
     widget_key = f"inventory_{last['key']}_{last.get('table_revision', 0)}"
     st.data_editor(table, hide_index=True, use_container_width=True, num_rows='fixed',
                    disabled=['개수'], key=widget_key, on_change=apply_inventory_edit,
@@ -524,8 +524,9 @@ def final_page(last):
     with st.container(key='estimate_summary'):
         presentation.estimate_label()
         if priced:
-            st.markdown(f'### {low:,}원 ~ {high:,}원')
-            st.caption(f'중앙값 기준 {mid:,}원 · 가격 근거가 있는 {len(priced)}개 품목 그룹 합계')
+            # 최종 가격 하나만 크게 (계산 과정은 아래 '계산 과정·근거 보기'에서 원할 때만)
+            st.markdown(f'### {mid:,}원')
+            st.caption(f'가격이 나온 {len(priced)}개 품목 그룹의 예상 중고가 × 개수 합계 · 시세 및 판매처에 따라 차이가 있을 수 있습니다.')
             if len(priced) < len(rows):
                 st.warning(f'부분 견적입니다. 가격 근거 부족 {len(rows) - len(priced)}개 품목 그룹은 합계에서 제외했습니다.')
             if len({e['price_basis'] for _, e in priced}) > 1:
@@ -536,7 +537,7 @@ def final_page(last):
     st.image(draw_boxes(last['image'], last['det']['objects'], last['box_names']),
              caption='수정 내용이 반영된 최종 분석 사진', use_container_width=True)
     st.subheader('최종 집기 목록')
-    columns = ['집기명', '제조사', '개수', '모델명', '상태']  # 사양 칸은 화면에서 제거 (2026-11-14, 내부 값은 모델명에서 자동 추출)
+    columns = ['집기명', '제조사', '개수', '모델명', '연식(년)']  # 사양 칸은 화면에서 제거 (2026-11-14, 내부 값은 모델명에서 자동 추출)
     table = pd.DataFrame([{k: row.get(k, '') for k in columns} for row in rows], columns=columns)
     edited = last.get('edited_makers', set())
     basis = last.get('brand_basis', {})
@@ -553,25 +554,24 @@ def final_page(last):
         st.dataframe(pd.DataFrame([{'품목': r['집기명'], '개수': r['개수'], '분류': r['분류']} for r in supplies]),
                      hide_index=True, use_container_width=True)
     st.subheader('물품별 가격 · 시세')
-    prices = table.copy()
     e = estimates
-    prices['개당 시세 하한 (원)'] = [x['low'] for x in e]
-    prices['개당 대표 가격 (원)'] = [x['mid'] for x in e]
-    prices['개당 시세 상한 (원)'] = [x['high'] for x in e]
-    prices['예상 매각액 하한 (원)'] = [x['low'] * c if x['low'] is not None else None for x, c in zip(e, prices['개수'])]
-    prices['예상 매각액 상한 (원)'] = [x['high'] * c if x['high'] is not None else None for x, c in zip(e, prices['개수'])]
-    prices['표본 수'] = [x['n'] for x in e]
-    prices['근거'] = [x['source'] for x in e]
-    prices['매칭'] = [x['match'] for x in e]
-    prices['신뢰도'] = [x['confidence'] for x in e]
-    prices['최근 수집일'] = [x['collected_at'] for x in e]
-    prices['직접 검색'] = [x['search_url'] for x in e]
+    prices = table[['집기명', '제조사', '개수', '모델명', '연식(년)']].copy()
+    prices['개당 예상 중고가 (원)'] = [x['mid'] for x in e]
+    prices['예상 매각액 (원)'] = [x['mid'] * c if x['mid'] is not None else None for x, c in zip(e, prices['개수'])]
     money = st.column_config.NumberColumn(format='localized')  # 6,000,000 처럼 3자리마다 쉼표
-    st.dataframe(prices, hide_index=True, use_container_width=True, column_config={
-        '개당 시세 하한 (원)': money, '개당 대표 가격 (원)': money, '개당 시세 상한 (원)': money,
-        '예상 매각액 하한 (원)': money, '예상 매각액 상한 (원)': money,
-        '직접 검색': st.column_config.LinkColumn(display_text='검색'),
-    })
+    st.dataframe(prices, hide_index=True, use_container_width=True,
+                 column_config={'개당 예상 중고가 (원)': money, '예상 매각액 (원)': money})
+    st.caption('시세 및 판매처에 따라 차이가 있을 수 있습니다.')
+    with st.expander('계산 과정·근거 보기'):
+        for r, x in zip(rows, e):
+            st.markdown(f"**{r['집기명']} · {r.get('제조사', '')} {r.get('모델명', '')}**".strip())
+            lines = x.get('calc') or [x['source']]
+            st.markdown('\n'.join(f'- {line}' for line in lines))
+            if not str(r.get('연식(년)', '')).strip():
+                st.caption('연식을 입력하면 신품가 기준 감가로 다시 계산합니다 (3단계 표의 연식(년) 칸).')
+        st.caption('연식 감가 규칙: 1년 차 개봉 감가 -30%, 2년 차부터 매년 1년 차 가격의 10%씩 차감, 최저 신품가의 10%. '
+                   '감가 속도의 근거: 법인세법 시행규칙 [별표5] 기구 및 비품 기준내용연수 5년. '
+                   '신품가는 팀 조사 추정가이며, 개봉 감가 30%는 중고 시장 관행을 반영한 가정값입니다.')
     st.caption('현재 가격은 팀 조사 시세표(품목·제조사·대표 모델별 중고 시세 범위)에서만 냅니다. 모델 → 제조사 → 품목 평균 순서로 찾으며, 개별 매물 원문 링크가 없는 조사값이라 실제 매각액과 다를 수 있습니다. 개당 Q1(25%)·중앙값·Q3(75%) × 수량으로 계산합니다. 유효 표본 3건 미만은 가격 근거 부족으로 표시합니다. '
                'DB는 최근 180일의 실제 개별 매물만 사용하며 샘플·묶음은 제외합니다. '
                '제조사·모델이 없으면 신뢰도가 낮은 참고 시세입니다. 판매 완료 게시 가격도 실제 거래액을 보장하지 않습니다. '

@@ -18,6 +18,6 @@ def inventory_rows(last):
     for (name, maker, model, spec, condition), ids in groups.items():
         row = {'집기명': name, '제조사': maker, '개수': len(ids), 'box_ids': ids}
         # 이전 세션과 호출자의 기본 행 형식 호환 유지.
-        row.update({key: value for key, value in zip(('모델명', '사양', '상태'), (model, spec, condition)) if value})
+        row.update({key: value for key, value in zip(('모델명', '사양', '연식(년)'), (model, spec, condition)) if value})
         rows.append(row)
     return rows
