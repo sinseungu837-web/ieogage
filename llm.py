@@ -298,12 +298,13 @@ def detect_all(image, model: str | None = None) -> tuple[dict, dict]:
         "- 사진이 여러 장 이어 붙여진 경우 각 칸을 모두 살펴본다.",
         "- 의자 근처의 테이블(사각·원형 상판 + 다리)도 반드시 찾는다. 테이블이 여러 개면 각각 박스. 의자만 찾고 테이블을 빠뜨리지 말 것.",
         "- brand: 그 품목의 후보 제조사 중 하나를 반드시 고른다. 로고·명판 글자가 보이면 그 제조사, 안 보이면 모양·색·크기·디테일이 가장 비슷한 후보를 예측한다.",
-        "- 같은 품목의 박스끼리 모양·색·로고 특징이 같으면 같은 brand, 눈에 띄게 다르면 서로 다른 brand 를 고른다 (예: 의자 6개 중 4개와 2개가 다르게 생겼으면 두 제조사로 나눔).",
+        "- design_group: 같은 품목 안에서 생김새(모양·색·재질·다리·등받이 형태)가 같은 박스끼리 같은 문자(A, B, C…), 다르게 생겼으면 다른 문자. 예: 흰 플라스틱 의자 4개 = A, 원목 의자 2개 = B.",
+        "- brand_rank: 그 박스와 비슷한 순서대로 후보 제조사 이름 최대 3개. brand 는 brand_rank 의 첫 번째와 같게.",
         "- model: 고른 제조사의 후보 모델명을 그대로 적는다. brand_basis: 로고·글자가 읽혔으면 \"로고\", 아니면 \"형태 예측\".",
         "[시세표] 품목: 제조사(영문): 대표 모델",
         reference.prompt_table(),
         "box_2d=[ymin,xmin,ymax,xmax] (0~1000 정규화). JSON 만:",
-        '{"items":[{"name":"...","category":"집기","box_2d":[0,0,0,0],"brand":"","model":"","brand_basis":"형태 예측","fixed":false,"uncertain":false}]}',
+        '{"items":[{"name":"...","category":"집기","box_2d":[0,0,0,0],"design_group":"A","brand":"","brand_rank":["",""],"model":"","brand_basis":"형태 예측","fixed":false,"uncertain":false}]}',
     ] if REFERENCE_ONLY else [
         "- brand·model: 물건의 로고·명판·라벨 글자가 사진에서 직접 읽히는 경우에만 그 글자 그대로 적는다 (예: brand \"La Marzocco\", model \"Linea PB\"). 글자가 안 보이면 빈 문자열. 모양만 보고 추측하지 말 것.",
         f"- 품목 이름은 가능하면 다음 사전에서: {p['dictionary']}",
@@ -340,13 +341,63 @@ def detect_all(image, model: str | None = None) -> tuple[dict, dict]:
         oid = len(objs)
         objs.append({"id": oid, "label": name, "box": [round(v, 1) for v in box], "task": "GEMINI",
                      "brand": brand, "model": model, "brand_basis": basis,
-                     "spec": ",".join(m.replace(" ", "") for m in re.findall(r"\d+\s*그룹|\d+\s*kg|\d+\s*평형", model, re.I))})
+                     "spec": ",".join(m.replace(" ", "") for m in re.findall(r"\d+\s*그룹|\d+\s*kg|\d+\s*평형", model, re.I)),
+                     "_group": str(it.get("design_group") or "").strip(),
+                     "_rank": [str(x) for x in (it.get("brand_rank") or []) if x]})
         g = groups.setdefault(name, {"ids": [], "cat": it.get("category", "집기"), "unc": False, "fixed": False})
         g["ids"].append(oid)
         g["unc"] |= bool(it.get("uncertain"))
         g["fixed"] |= bool(it.get("fixed"))
+    if REFERENCE_ONLY:
+        assign_design_brands(objs)
+    for o in objs:
+        o.pop("_group", None)
+        o.pop("_rank", None)
     items = [{"name": n, "count": len(g["ids"]), "source_ids": g["ids"], "in_dictionary": n in p["dictionary"],
               "uncertain": g["unc"] or g["fixed"], "category": g["cat"] if g["cat"] in ("집기", "고정 설비", "재고·소모품", "기타") else "집기",
               **({"note": "고정 설비 의심"} if g["fixed"] else {})} for n, g in groups.items()]
     det = {"objects": objs, "rejected": [], "seconds": round(time.time() - t0, 1), "truncated": False}
     return det, {"items": items, "excluded": [], "verified": []}
+
+
+def assign_design_brands(objs):
+    """같은 품목에서 생김새 그룹(design_group)이 다르면 서로 다른 제조사가 되도록 코드로 맞춘다.
+    - 같은 그룹 박스는 모두 같은 제조사
+    - 다른 그룹이 같은 제조사를 골랐으면, 나중 그룹은 brand_rank 의 다음 후보 중 아직 안 쓴 제조사로
+    - 로고로 읽힌 그룹이 먼저 자리를 잡고, 그다음 박스가 많은 그룹 순
+    - 후보가 모자라면 겹치는 것을 허용 (사용자가 3단계에서 수정)"""
+    by_item = {}
+    for o in objs:
+        # design_group 이 없으면 Gemini 가 고른 제조사끼리 한 그룹으로 본다 (같은 의자를 억지로 나누지 않음)
+        by_item.setdefault(o["label"], {}).setdefault(o["_group"] or "brand:" + o["brand"], []).append(o)
+    for item, groups in by_item.items():
+        if len(groups) < 2:
+            for members in groups.values():  # 한 그룹이면 다수결로 제조사 통일
+                _apply(item, members, _majority(members))
+            continue
+        order = sorted(groups.values(), key=lambda m: (not any(o["brand_basis"] == "로고" for o in m), -len(m)))
+        used = set()
+        for members in order:
+            ranked = [_majority(members)] + [reference.match_maker(item, r) for o in members for r in o["_rank"]]
+            ranked += [r["manufacturer"] for r in reference.candidates(item)]  # 마지막 보충: 시세표 순서
+            ranked = [b for b in dict.fromkeys(ranked) if b]
+            choice = next((b for b in ranked if b not in used), ranked[0] if ranked else "")
+            used.add(choice)
+            _apply(item, members, choice)
+
+
+def _majority(members):
+    brands = [o["brand"] for o in members if o["brand"]]
+    return max(set(brands), key=brands.count) if brands else ""
+
+
+def _apply(item, members, brand):
+    if not brand:
+        return
+    keep = next((o["model"] for o in members if o["brand"] == brand and o["model"]), "")
+    model = keep or next((r["model"] for r in reference.candidates(item) if r["manufacturer"] == brand), "")
+    for o in members:
+        if o["brand"] != brand:
+            o["brand_basis"] = "형태 예측"
+        o["brand"], o["model"] = brand, model
+        o["spec"] = ",".join(m.replace(" ", "") for m in re.findall(r"\d+\s*그룹|\d+\s*kg|\d+\s*평형", model, re.I))

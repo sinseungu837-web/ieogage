@@ -83,3 +83,29 @@ class ReloadTest(unittest.TestCase):
                 makers = {r['manufacturer'] for r in reference.rows()}
                 self.assertIn('바뀐회사', makers)
                 self.assertNotIn('톤', makers)
+
+
+class DesignGroupTest(unittest.TestCase):
+    def run_detect(self, items):
+        resp = SimpleNamespace(text=json.dumps({'items': items}, ensure_ascii=False))
+        with patch('llm._generate', return_value=resp), patch('llm._model', return_value='m'):
+            return llm.detect_all(Image.new('RGB', (1000, 1000)))[0]['objects']
+
+    def chair(self, x, group, brand, rank):
+        return {'name': '의자', 'box_2d': [500, x, 800, x + 80], 'design_group': group, 'brand': brand, 'brand_rank': rank}
+
+    def test_different_design_gets_different_maker(self):
+        objs = self.run_detect([self.chair(0, 'A', '톤', ['톤', '톨릭스']), self.chair(100, 'A', '톤', ['톤']),
+                                self.chair(200, 'A', '톤', ['톤']), self.chair(300, 'B', '톤', ['톤', '이케아'])])
+        brands = [o['brand'] for o in objs]
+        self.assertEqual(brands[:3], ['톤'] * 3)  # 많은 그룹이 첫 후보 유지
+        self.assertEqual(brands[3], '이케아')     # 다르게 생긴 그룹은 다음 후보
+
+    def test_same_design_unified(self):
+        objs = self.run_detect([self.chair(0, 'A', '톤', ['톤']), self.chair(100, 'A', '톤', ['톤']),
+                                self.chair(200, 'A', '톨릭스', ['톨릭스'])])
+        self.assertEqual({o['brand'] for o in objs}, {'톤'})  # 같은 생김새는 다수결로 통일
+
+    def test_no_group_keeps_gemini_brands(self):
+        objs = self.run_detect([{'name': '의자', 'box_2d': [500, x, 800, x + 80], 'brand': '톤'} for x in (0, 100, 200)])
+        self.assertEqual({o['brand'] for o in objs}, {'톤'})
