@@ -109,3 +109,20 @@ class DesignGroupTest(unittest.TestCase):
     def test_no_group_keeps_gemini_brands(self):
         objs = self.run_detect([{'name': '의자', 'box_2d': [500, x, 800, x + 80], 'brand': '톤'} for x in (0, 100, 200)])
         self.assertEqual({o['brand'] for o in objs}, {'톤'})
+
+
+class CountModeTest(unittest.TestCase):
+    def run_detect(self, mode):
+        items = [{'name': '의자', 'box_2d': [562, 410, 1000, 998], 'brand': '톤'},   # 앞쪽 큰 의자
+                 {'name': '의자', 'box_2d': [875, 408, 1000, 513], 'brand': '톤'},   # 그 안에 일부만 보이는 뒤 의자
+                 {'name': '의자', 'box_2d': [100, 100, 300, 200], 'brand': '톤'},
+                 {'name': '의자', 'box_2d': [102, 101, 301, 201], 'brand': '톤'}]   # 같은 의자를 두 번 그림
+        resp = SimpleNamespace(text=json.dumps({'items': items}, ensure_ascii=False))
+        with patch('llm._generate', return_value=resp), patch('llm._model', return_value='m'):
+            return len(llm.detect_all(Image.new('RGB', (1000, 1000)), count_mode=mode)[0]['objects'])
+
+    def test_dedupe_keeps_partly_hidden_chair(self):
+        self.assertEqual(self.run_detect('dedupe'), 3)  # 실측 버그: 예전 규칙은 뒤 의자를 지워 2개
+
+    def test_all_mode_keeps_everything_but_exact_double(self):
+        self.assertEqual(self.run_detect('all'), 3)

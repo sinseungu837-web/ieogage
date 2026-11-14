@@ -181,7 +181,7 @@ def rebuild_items_from_boxes(objects: list[dict], names: dict[int, str], orig_it
     return new_items
 
 
-def analyze_photo(image, key):
+def analyze_photo(image, key, count_mode="dedupe"):
     if not take_daily_quota():
         st.error("오늘 서비스 전체 분석 한도에 도달했습니다. 내일 다시 이용해 주세요.")
         st.stop()
@@ -194,7 +194,7 @@ def analyze_photo(image, key):
     if True:  # Gemini 단독 탐지 (최종): 1회 호출로 탐지·이름·분류까지
         with st.spinner("사진 전체에서 판매할 물건을 찾는 중 (Gemini)..."):
             try:
-                det, result = llm.detect_all(image)
+                det, result = llm.detect_all(image, count_mode=count_mode)
             except Exception as e:
                 code = getattr(e, "code", None)
                 if code in (429, 500, 503, 504) or "Timeout" in type(e).__name__:
@@ -442,7 +442,13 @@ def photo_page():
             draft['image'] = image.rotate(-90, expand=True)
             st.rerun()
         import hashlib
-        key = hashlib.md5(image.tobytes()).hexdigest()
+        modes = list(llm.COUNT_MODES)
+        count_mode = st.radio('개수 세는 방식', modes, format_func=llm.COUNT_MODES.get, horizontal=True,
+                              index=modes.index(st.session_state.get('count_mode', 'dedupe')),
+                              help='중복 제거: 같은 물건을 두 번 세지 않도록 확실히 보이는 것만 셉니다. '
+                                   '보이는 대로 모두: 일부만 보이거나 가려진 물건까지 모두 셉니다 (과다 집계 가능).')
+        st.session_state.count_mode = count_mode
+        key = hashlib.md5(image.tobytes() + count_mode.encode()).hexdigest()  # 방식이 바뀌면 새로 분석
         already = st.session_state.get('last', {}).get('key') == key
         if already:
             st.caption('이 사진의 분석 결과가 있습니다. 기존 수정 내용을 이어서 확인할 수 있어요.')
@@ -453,7 +459,7 @@ def photo_page():
             if not llm.get_api_key():
                 st.error('서버에 AI 키가 설정되지 않았습니다. 관리자에게 문의하세요.')
             else:
-                analyze_photo(image, key)
+                analyze_photo(image, key, count_mode)
         if limit:
             st.warning('이 화면에서 가능한 분석 횟수를 모두 사용했습니다.')
     if st.button('← 시작 화면'):

@@ -267,7 +267,25 @@ def _overlap(a, b) -> float:
 
 
 
-def detect_all(image, model: str | None = None) -> tuple[dict, dict]:
+COUNT_MODES = {"dedupe": "중복 제거 (권장)", "all": "보이는 대로 모두"}
+
+
+def _is_duplicate(a, b, mode):
+    """같은 물건을 두 번 그린 박스인가.
+    dedupe: 거의 같은 자리(IoU>0.6), 또는 작은 박스가 큰 박스에 90% 이상 들어가면서 크기도 비슷(면적비 0.5 이상)
+            → 앞쪽 큰 의자 박스 안에 일부만 보이는 뒤쪽 의자는 지우지 않음 (2026-11-14 실측 버그)
+    all:    완전히 같은 박스(IoU>0.9)만 제거, 나머지는 모두 개수에 포함"""
+    x1, y1, x2, y2 = max(a[0], b[0]), max(a[1], b[1]), min(a[2], b[2]), min(a[3], b[3])
+    inter = max(0, x2 - x1) * max(0, y2 - y1)
+    area = lambda r: max(1e-6, (r[2] - r[0]) * (r[3] - r[1]))
+    iou = inter / (area(a) + area(b) - inter)
+    if mode == "all":
+        return iou > 0.9
+    small, big = sorted((area(a), area(b)))
+    return iou > 0.6 or (inter / small > 0.9 and small / big >= 0.5)
+
+
+def detect_all(image, model: str | None = None, count_mode: str = "dedupe") -> tuple[dict, dict]:
     """[Gemini 단독 모드] 사진 전체를 1회 보고 판매 대상 물건을 박스·이름·분류와 함께 모두 찾는다.
     반환: (det, result) — 기존 RF-DETR 경로와 같은 형식이라 화면 코드를 그대로 쓴다."""
     import time
@@ -280,6 +298,9 @@ def detect_all(image, model: str | None = None) -> tuple[dict, dict]:
     instruction = "\n".join([
         "폐업을 앞둔 매장(카페·음식점) 사진이다. 중고로 팔 수 있는 물건을 사진에서 빠짐없이 찾아라.",
         "- 같은 물건이 여러 개면 하나하나 따로 박스를 그린다 (의자 6개면 6개).",
+        ("- 일부만 보이거나 다른 물건 뒤에 가려진 것도 보이는 만큼 모두 박스를 그린다. 같은 물건에 박스를 두 번 그리지는 말 것."
+         if count_mode == "all" else
+         "- 실제 물건 하나에 박스는 하나 (같은 물건을 두 번 세지 말 것)."),
         "- 사람, 벽·바닥·천장·창문·문, 꽃·식물, 먹다 남은 음식, 글자·간판 문구는 제외.",
         '- category 는 넷 중 하나:',
         '  1) "집기": 떼어서 중고로 팔 수 있는 장비·가구·가전. 예: 에스프레소 머신, 커피 그라인더, 제빙기, 블렌더, 업소용·테이블·쇼케이스 냉장고,',
@@ -336,7 +357,7 @@ def detect_all(image, model: str | None = None) -> tuple[dict, dict]:
         box = [x1 * W / 1000, y1 * H / 1000, x2 * W / 1000, y2 * H / 1000]
         if box[2] - box[0] < 6 or box[3] - box[1] < 6:
             continue
-        if any(o["label"] == name and _overlap(box, o["box"]) > 0.7 for o in objs):
+        if any(o["label"] == name and _is_duplicate(box, o["box"], count_mode) for o in objs):
             continue  # 같은 물건을 두 번 그린 경우
         oid = len(objs)
         objs.append({"id": oid, "label": name, "box": [round(v, 1) for v in box], "task": "GEMINI",
