@@ -17,7 +17,7 @@ import vision
 from box_selector import select_box, validated_box
 from inventory import inventory_rows
 import disposal_view
-from disposal import row_key
+from disposal import row_key, sync_states
 from estimate_view import safe_estimate
 import presentation
 
@@ -420,13 +420,16 @@ def start_page():
 
 
 def photo_page():
-    presentation.section_label(2, '사진 입력')
+    presentation.section_label(1, '사진 입력')
     st.header('사진을 준비해 주세요')
     st.caption('집기가 잘 보이도록 매장을 넓게 찍어 주세요. JPG·PNG, 최대 10MB')
     methods = ['사진 올리기', '카메라로 찍기']
     source = st.radio('사진 입력', methods, index=methods.index(st.session_state.get('input_method', methods[0])), horizontal=True)
     st.session_state.input_method = source
-    file = st.file_uploader('매장 사진', type=['jpg', 'jpeg', 'png']) if source == methods[0] else st.camera_input('매장을 넓게 찍어 주세요')
+    file = st.file_uploader('매장 사진', type=['jpg', 'jpeg', 'png'], accept_multiple_files=False) if source == methods[0] else st.camera_input('매장을 넓게 찍어 주세요')
+    with st.expander('iPhone에서 사진 선택이 완료되지 않나요?'):
+        st.write('사진 보관함의 선택 창은 iOS가 표시합니다. 완료 버튼이 보이지 않으면 선택 창을 닫고 Safari에서 직접 다시 열어 주세요. 앱 내부 브라우저라면 Safari로 열어 주세요.')
+        st.write('계속되면 사진을 파일 앱에 저장한 뒤 업로드의 파일 선택으로 열거나, 카메라로 찍기를 이용해 주세요. HEIC 사진은 JPG 또는 PNG로 변환하고 10MB 이하로 준비해 주세요.')
     if file is not None:
         if file.size > MAX_UPLOAD_MB * 1024 * 1024:
             st.error(f'{MAX_UPLOAD_MB}MB 이하 사진만 올릴 수 있습니다.')
@@ -502,9 +505,7 @@ def cached_estimate(name: str, manufacturer='', model='', spec='', condition='',
     return price.service_estimate(name, manufacturer, model, spec, condition)
 
 
-def final_page(last):
-    presentation.section_label(4, '최종 분석 · 처분 준비')
-    st.header('최종 분석 · 처분 준비')
+def disposal_rows(last):
     all_rows = inventory_rows(last)
     # Gemini 가 붙인 분류. 사용자가 새로 그린 박스나 바꾼 이름은 '집기'
     category = {it['name']: it.get('category', '집기') for it in last.get('result', {}).get('items', [])}
@@ -515,7 +516,51 @@ def final_page(last):
     # 재고·소모품·장식은 가격 조회 없이 '묶음 1건'으로 따로 표시 (총액 제외)
     supplies = [r for r in all_rows if r['분류'] in ('재고·소모품', '기타')]
     rows = [r for r in all_rows if r not in fixed and r not in supplies]
-    disposal_states = disposal_view.selection(last, rows)
+    return rows, fixed, supplies
+
+
+def plan_screen():
+    last = st.session_state.get('last')
+    if not last:
+        go_to(2)
+    presentation.section_label(3, '처분 계획')
+    st.header('처분할 물품과 방식을 골라 주세요')
+    rows, fixed, supplies = disposal_rows(last)
+    disposal_view.selection(last, rows)
+    if fixed or supplies:
+        st.caption('고정 설비·재고·소모품은 참고 견적 대상에서 제외됩니다. 최종 견적에서 별도로 확인할 수 있습니다.')
+    with st.container(key='page_actions'):
+        left, right = st.columns(2)
+        if left.button('← 분석·수정', use_container_width=True):
+            go_to(3)
+        if right.button('최종 견적 보기 →', type='primary', use_container_width=True):
+            go_to(5)
+
+
+def sale_screen():
+    last = st.session_state.get('last')
+    if not last:
+        go_to(2)
+    presentation.section_label(5, '판매 준비')
+    st.header('물품의 다음 쓰임을 준비하세요')
+    rows, _, _ = disposal_rows(last)
+    states = sync_states(last, rows)
+    estimates = [safe_estimate(row, price, cached_estimate) for row in rows]
+    disposal_view.results(last, rows, estimates, states)
+    with st.container(key='page_actions'):
+        left, right = st.columns(2)
+        if left.button('← 최종 견적', use_container_width=True):
+            go_to(5)
+        if right.button('처분 계획 수정', use_container_width=True):
+            go_to(4)
+
+
+def final_page(last):
+    presentation.section_label(4, '최종 견적')
+    st.header('선택한 물품의 참고 중고 가치')
+    rows, fixed, supplies = disposal_rows(last)
+    disposal_states = sync_states(last, rows)
+    rows = [row for row in rows if disposal_states[row_key(row)]['selected']]
     estimates = []
     with st.spinner('저장된 가격 DB와 보조 공매 기록을 확인하는 중...'):
         for row in rows:
@@ -542,9 +587,9 @@ def final_page(last):
             st.markdown('### — 원 ~ — 원')
             st.caption('가격 근거가 있는 품목이 없습니다. 아래 검색 링크로 직접 확인해 주세요.')
     st.caption('합계는 선택한 물품의 참고 가치이며, 실제 현금 회수 예상액이 아닙니다. 양도·나눔 물품의 가치도 포함됩니다.')
-    st.image(draw_boxes(last['image'], last['det']['objects'], last['box_names']),
-             caption='수정 내용이 반영된 최종 분석 사진', use_container_width=True)
-    st.subheader('최종 집기 목록')
+    with st.expander('최종 탐지 결과 확인'):
+        st.image(draw_boxes(last['image'], last['det']['objects'], last['box_names']),
+                 caption='수정 내용이 반영된 최종 분석 사진', use_container_width=True)
     columns = ['집기명', '제조사', '개수', '모델명', '연식(년)']  # 사양 칸은 화면에서 제거 (2026-11-14, 내부 값은 모델명에서 자동 추출)
     table = pd.DataFrame([{k: row.get(k, '') for k in columns} for row in rows], columns=columns)
     table['처분 대상'] = [disposal_states[row_key(r)]['selected'] for r in rows]
@@ -552,11 +597,12 @@ def final_page(last):
     basis = last.get('brand_basis', {})
     table['제조사 근거'] = ['사용자 입력' if any(i in edited for i in r['box_ids']) else
                        next((basis[i] for i in r['box_ids'] if basis.get(i)), '') for r in rows]
-    st.dataframe(table, hide_index=True, use_container_width=True)
+    with st.expander('선택한 집기 상세 목록'):
+        st.dataframe(table, hide_index=True, use_container_width=True)
     if fixed:
         st.caption('고정 설비로 분류되어 견적에서 제외: '
                    + ', '.join(f"{r['집기명']} {r['개수']}" for r in fixed)
-                   + ' (떼어 팔 수 있다면 3단계에서 이름을 바꿔 주세요)')
+                   + ' (떼어 팔 수 있다면 2단계에서 이름을 바꿔 주세요)')
     if supplies:
         st.subheader('재고·소모품 묶음')
         st.caption('컵·원두·병 음료·소품 등은 개별 시세 대신 묶음 1건으로 정리합니다. 참고 가치 합계에는 포함하지 않습니다.')
@@ -567,9 +613,11 @@ def final_page(last):
     prices = table[['집기명', '제조사', '개수', '모델명', '연식(년)']].copy()
     prices['개당 예상 중고가 (원)'] = [x['mid'] for x in e]
     prices['수량별 참고 가치 (원)'] = [x['mid'] * c if x['mid'] is not None else None for x, c in zip(e, prices['개수'])]
-    money = st.column_config.NumberColumn(format='localized')  # 6,000,000 처럼 3자리마다 쉼표
-    st.dataframe(prices, hide_index=True, use_container_width=True,
-                 column_config={'개당 예상 중고가 (원)': money, '수량별 참고 가치 (원)': money})
+    st.dataframe(prices[['집기명', '개수', '개당 예상 중고가 (원)', '수량별 참고 가치 (원)']], hide_index=True, use_container_width=True,
+                 column_config={'집기명': st.column_config.TextColumn(width=90),
+                                '개수': st.column_config.NumberColumn('수량', width=48),
+                                '개당 예상 중고가 (원)': st.column_config.NumberColumn('개당(원)', width=95, format='localized'),
+                                '수량별 참고 가치 (원)': st.column_config.NumberColumn('합계(원)', width=100, format='localized')})
     st.caption('시세 및 판매처에 따라 차이가 있을 수 있습니다.')
     with st.expander('계산 과정·근거 보기'):
         for r, x in zip(rows, e):
@@ -577,14 +625,15 @@ def final_page(last):
             lines = x.get('calc') or [x['source']]
             st.markdown('\n'.join(f'- {line}' for line in lines))
             if not str(r.get('연식(년)', '')).strip():
-                st.caption('연식을 입력하면 신품가 기준 감가로 다시 계산합니다 (3단계 표의 연식(년) 칸).')
+                st.caption('연식을 입력하면 신품가 기준 감가로 다시 계산합니다 (2단계 표의 연식(년) 칸).')
         st.caption('연식 감가 규칙: 1년 차 개봉 감가 -30%, 2년 차부터 매년 1년 차 가격의 10%씩 차감, 최저 신품가의 10%. '
                    '감가 속도의 근거: 법인세법 시행규칙 [별표5] 기구 및 비품 기준내용연수 5년. '
                    '신품가는 팀 조사 추정가이며, 개봉 감가 30%는 중고 시장 관행을 반영한 가정값입니다.')
-    st.caption('현재 가격은 팀 조사 시세표(품목·제조사·대표 모델별 중고 시세 범위)에서만 냅니다. 모델 → 제조사 → 품목 평균 순서로 찾으며, 개별 매물 원문 링크가 없는 조사값이라 실제 매각액과 다를 수 있습니다. 개당 Q1(25%)·중앙값·Q3(75%) × 수량으로 계산합니다. 유효 표본 3건 미만은 가격 근거 부족으로 표시합니다. '
-               'DB는 최근 180일의 실제 개별 매물만 사용하며 샘플·묶음은 제외합니다. '
-               '제조사·모델이 없으면 신뢰도가 낮은 참고 시세입니다. 판매 완료 게시 가격도 실제 거래액을 보장하지 않습니다. '
-               '보조 온비드 기록은 최근 2년의 공매 낙찰가로 일반 중고 시세보다 낮을 수 있습니다.')
+    with st.expander('참고 가격 안내'):
+        st.caption('현재 가격은 팀 조사 시세표(품목·제조사·대표 모델별 중고 시세 범위)에서만 냅니다. 모델 → 제조사 → 품목 평균 순서로 찾으며, 개별 매물 원문 링크가 없는 조사값이라 실제 매각액과 다를 수 있습니다. 개당 Q1(25%)·중앙값·Q3(75%) × 수량으로 계산합니다. 유효 표본 3건 미만은 가격 근거 부족으로 표시합니다. '
+                   'DB는 최근 180일의 실제 개별 매물만 사용하며 샘플·묶음은 제외합니다. '
+                   '제조사·모델이 없으면 신뢰도가 낮은 참고 시세입니다. 판매 완료 게시 가격도 실제 거래액을 보장하지 않습니다. '
+                   '보조 온비드 기록은 최근 2년의 공매 낙찰가로 일반 중고 시세보다 낮을 수 있습니다.')
     with st.expander('가격 근거 보기 (출처·원본 매물·수집일)'):
         ev = [{'집기명': r['집기명'], '입력 제조사': r['제조사'], **record}
               for r, x in zip(rows, e) for record in x['evidence']]
@@ -596,7 +645,6 @@ def final_page(last):
                      column_config={'url': st.column_config.LinkColumn('원본 매물/검색', display_text='보기'),
                                     'price': st.column_config.NumberColumn('가격 (원)', format='localized'),
                                     '낙찰가': st.column_config.NumberColumn('낙찰가 (원)', format='localized')})
-    disposal_view.results(last, rows, estimates, disposal_states)
     export = prices.copy()
     export['처분 대상'] = [disposal_states[row_key(r)]['selected'] for r in rows]
     export['처분 방식'] = [disposal_states[row_key(r)]['method'] for r in rows]
@@ -608,24 +656,24 @@ def final_page(last):
                        file_name='이어가게_최종목록.csv', mime='text/csv')
     with st.container(key='page_actions'):
         left, right = st.columns(2)
-        if left.button('← 분석 내용 다시 수정', use_container_width=True):
-            go_to(3)
-        if right.button('시작 화면으로', use_container_width=True):
-            go_to(1)
+        if left.button('← 처분 계획', use_container_width=True):
+            go_to(4)
+        if right.button('판매 준비 →', type='primary', use_container_width=True):
+            go_to(6)
 
 
 def edit_screen():
     last = st.session_state.get('last')
     if not last:
         go_to(2)
-    presentation.section_label(3, '분석 결과 확인 · 직접 수정')
+    presentation.section_label(2, '분석 결과 확인 · 직접 수정')
     edit_page(last)
     edit_inventory_table(last)
     with st.container(key='page_actions'):
         left, right = st.columns(2)
         if left.button('← 사진 입력으로', use_container_width=True):
             go_to(2)
-        if right.button('수정 완료 · 최종 견적 보기 →', type='primary', use_container_width=True):
+        if right.button('수정 완료 · 처분 계획 →', type='primary', use_container_width=True):
             go_to(4)
 
 
@@ -640,12 +688,14 @@ def final_screen():
 PAGES = [st.Page(start_page, title='시작', default=True),
          st.Page(photo_page, title='사진 입력', url_path='photo'),
          st.Page(edit_screen, title='분석·수정', url_path='edit'),
-         st.Page(final_screen, title='최종 견적', url_path='estimate')]
+         st.Page(plan_screen, title='처분 계획', url_path='plan'),
+         st.Page(final_screen, title='최종 견적', url_path='estimate'),
+         st.Page(sale_screen, title='판매 준비', url_path='sale')]
 navigation = st.navigation(PAGES, position='hidden')
 presentation.masthead()
 st.session_state.setdefault('runs', 0)
-steps = ['시작', '사진 입력', '분석·수정', '최종 견적']
-step = steps.index(navigation.title) + 1
+steps = ['사진 입력', '분석·수정', '처분 계획', '최종 견적', '판매 준비']
+step = steps.index(navigation.title) + 1 if navigation.title in steps else 0
 presentation.stage_navigation(step, steps)
 with st.container(key=f'page_{step}'):
     navigation.run()

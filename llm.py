@@ -52,7 +52,7 @@ def get_api_key() -> str | None:
             key = st.secrets.get("GEMINI_API_KEY")
         except Exception:
             key = None
-    return key
+    return key.strip() if isinstance(key, str) and key.strip() else None
 
 
 _CLIENT = None
@@ -72,8 +72,11 @@ def _generate(**kw):
     (2026-11-13 기본 모델이 간헐적 503: 같은 시각 gemini-3.5-flash-lite 는 정상 응답 확인)"""
     import time
     from google.genai import errors
+    max_attempts = kw.pop("max_attempts", None)
     first = kw.pop("model")
     plan = [first, first] + [m for m in FALLBACK_MODELS if m != first] + [first]
+    if max_attempts is not None:
+        plan = ([first] + [m for m in FALLBACK_MODELS if m != first])[:max_attempts]
     waits = [1, 1, 2, 2, 3]
     last = None
     for n, m in enumerate(plan):
@@ -429,11 +432,45 @@ def _apply(item, members, brand):
 def generate_sale_post(row, state, model=None):
     """기존 Gemini 클라이언트/모델 사용. 근거 문장 밖의 출력은 조립하지 않는다."""
     from disposal import sale_facts, validate_draft
+    if not get_api_key():
+        raise SaleConfigurationError()
     titles, facts = sale_facts(row, state)
     response = _generate(
+        max_attempts=2,
         model=_model(model),
         contents=json.dumps({'titles': titles, 'sentences': facts}, ensure_ascii=False),
         config=types.GenerateContentConfig(
             system_instruction=(Path(__file__).parent / 'prompts/sale_post_v1.md').read_text(encoding='utf-8'),
-            temperature=0, response_mime_type='application/json'))
+            temperature=0, response_mime_type='application/json',
+            response_schema={'type': 'object', 'required': ['title_index', 'sentence_order'],
+                'properties': {'title_index': {'type': 'integer', 'minimum': 0, 'maximum': len(titles)-1},
+                    'sentence_order': {'type': 'array', 'minItems': len(facts), 'maxItems': len(facts),
+                        'items': {'type': 'integer', 'minimum': 0, 'maximum': len(facts)-1}}}}))
+    if not response.text:
+        raise ValueError('판매글 응답이 비어 있습니다')
     return validate_draft(json.loads(response.text), titles, facts)
+
+
+class SaleConfigurationError(RuntimeError):
+    pass
+
+
+def sale_error_message(exc):
+    # SDK 예외 원문·요청 URL·키는 화면/로그에 전달하지 않는다.
+    code = getattr(exc, 'code', None)
+    if isinstance(exc, SaleConfigurationError):
+        reason = '서버에 GEMINI_API_KEY가 설정되지 않았습니다. 배포 환경의 Secrets를 확인해 주세요.'
+    elif code in (400, 401, 403):
+        reason = 'API 인증·권한 또는 요청 설정을 확인해 주세요.'
+    elif code == 404:
+        reason = '설정된 Gemini 모델에 접근할 수 없습니다. 서버의 모델 설정을 확인해 주세요.'
+    elif code == 429:
+        reason = 'Gemini 사용량 한도에 도달했습니다. 할당량을 확인하고 잠시 후 다시 시도해 주세요.'
+    elif code in (500, 502, 503, 504):
+        reason = 'Gemini 서버가 일시적으로 혼잡합니다. 잠시 후 다시 시도해 주세요.'
+    elif isinstance(exc, ValueError):
+        reason = 'AI 응답의 형식이나 사실 문장 검증에 실패했습니다. 다시 생성해 주세요.'
+    else:
+        reason = 'AI 서버 연결 또는 처리에 실패했습니다. 잠시 후 다시 시도해 주세요.'
+    suffix = f' (오류 코드 {code})' if type(code) is int and 100 <= code <= 599 else ''
+    return '판매글을 생성하지 못했습니다. ' + reason + suffix

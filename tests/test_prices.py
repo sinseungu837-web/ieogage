@@ -118,7 +118,7 @@ class PriceTest(unittest.TestCase):
     def test_broken_csv_and_api_timeout_do_not_crash(self):
         self.path.write_text('broken\n1\n')
         with patch('price.onbid_estimate', side_effect=TimeoutError):
-            e = price.estimate('제빙기', listings_path=self.path)
+            e = price.estimate('제빙기', listings_path=self.path, allow_live=False)
         self.assertIsNone(e['mid'])
         self.assertIn('DB 조회 오류', e['source'])
 
@@ -126,7 +126,7 @@ class PriceTest(unittest.TestCase):
         self.write([record(0)])
         fallback = dict(low=1000, mid=2000, high=3000, n=3, source='온비드', evidence=[], search_url='https://example.org')
         with patch('price.onbid_estimate', return_value=fallback):
-            e = price.estimate('커피머신', listings_path=self.path)
+            e = price.estimate('커피머신', listings_path=self.path, allow_live=False)
         self.assertEqual(e['mid'], 2000)
         self.assertEqual(e['price_basis'], 'auction')
 
