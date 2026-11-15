@@ -77,59 +77,7 @@ class DisposalTest(unittest.TestCase):
         self.assertNotIn('참고 시세', call.call_args.kwargs['contents'])
 
 
-class DisposalUITest(unittest.TestCase):
-    def page(self):
-        from streamlit.testing.v1 import AppTest
-        return AppTest.from_string('''
-import streamlit as st
-import disposal_view
-from disposal import reference_total
-rows = %r
-last = st.session_state.setdefault('last', {'key': 'fixture'})
-states = disposal_view.selection(last, rows)
-estimates = [{'mid': 100}, {'mid': None}]
-st.metric('참고 가치', reference_total(rows, estimates, states))
-if st.checkbox('결과 화면 표시', value=True):
-    disposal_view.results(last, rows, estimates, states)
-''' % ROWS).run()
-
-    def set_method(self, page, method):
-        from disposal_view import apply_selection_edits
-        apply_selection_edits(page.session_state['last'], ['1,2', '3'], {0: {'처분 방식': method}})
-        page.run()
-
-    def test_select_edit_regenerate_preserve_and_failure(self):
-        import llm
-        page = self.page()
-        self.assertFalse(page.exception)
-        page.button[1].click().run()
-        self.assertEqual(page.metric[0].value, '0')
-        page.button[0].click().run()
-        self.assertEqual(page.metric[0].value, '200')
-        self.set_method(page, '개인 중고거래')
-        with patch.object(llm, 'generate_sale_post', return_value={'title': '초안', 'body': '본문'}):
-            page.button(key='sale:fixture:1,2:generate').click().run()
-        page.text_input(key='sale:fixture:1,2:title').input('내가 수정').run()
-        page.checkbox[-1].uncheck().run()
-        page.checkbox[-1].check().run()
-        self.assertEqual(page.text_input[0].value, '내가 수정')
-        self.set_method(page, '전문업체 매각')
-        self.set_method(page, '개인 중고거래')
-        self.assertEqual(page.text_input[0].value, '내가 수정')
-        with patch.object(llm, 'generate_sale_post', return_value={'title': '새 초안', 'body': '새 본문'}):
-            page.button(key='sale:fixture:1,2:generate').click().run()
-        self.assertEqual(page.text_input[0].value, '내가 수정')
-        page.button(key='sale:fixture:1,2:apply').click().run()
-        self.assertEqual(page.text_input[0].value, '새 초안')
-        page.number_input[0].set_value(999).run()
-        self.assertTrue(any('변경' in w.value for w in page.warning))
-        self.assertEqual(page.text_input[0].value, '새 초안')
-        self.assertEqual(len(page.code), 2)
-        with patch.object(llm, 'generate_sale_post', side_effect=RuntimeError('private key')):
-            page.button(key='sale:fixture:1,2:generate').click().run()
-        self.assertEqual(page.text_input[0].value, '새 초안')
-        self.assertNotIn('private key', page.error[0].value)
-        self.assertFalse(page.exception)
+# DisposalUITest 삭제 (2026-11-15): 처분 방식·판매글 화면을 화면 구상안에 따라 제거
 
 
 class MobileRegressionTest(unittest.TestCase):
