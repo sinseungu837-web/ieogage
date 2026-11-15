@@ -28,9 +28,8 @@ a { color: #944126; text-underline-offset: 3px; }
 hr { border-color: var(--fs-line); margin: .8rem 0; }
 .fs-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 0 0 22px; border-bottom: 1px solid var(--fs-line); }
 .fs-brand { margin: 0; display: flex; align-items: center; gap: 10px; color: var(--fs-ink); font-size: 23px; font-weight: 780; letter-spacing: -.06em; }
-.fs-mark { width: 35px; height: 35px; flex-shrink: 0; display: grid; place-items: center; padding: 7px; border-radius: 11px; background: var(--fs-ink); color: var(--fs-paper); }
-.fs-mark { font-size: 27px; line-height: 1; font-family: Arial, sans-serif; font-weight: 400; }
-.fs-header-note { font-size: 11px; color: var(--fs-muted); letter-spacing: .025em; }
+.fs-mark { width: 35px; height: 35px; flex-shrink: 0; display: grid; place-items: center; }
+.fs-brand-logo { display: block; width: 100%; height: 100%; object-fit: contain; }
 .fs-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; padding: 0 !important; margin: 3px 0 14px; list-style: none; }
 .fs-step { display: flex; align-items: center; justify-content: center; min-width: 0; text-align: center; gap: 9px; color: var(--fs-muted); min-height: 48px; border-bottom: 1px solid var(--fs-line); font-size: 12px; }
 .fs-step b { width: 28px; height: 28px; display: inline-grid; place-items: center; flex-shrink: 0; background: #e9e8df; border-radius: 9px; font-size: 11px; font-weight: 650; }
@@ -88,7 +87,6 @@ iframe[title="box_selector.box_selector"] { border-radius: 18px; border: 1px sol
   [data-testid="stVerticalBlock"] { gap: .8rem; }
   .fs-header { padding-bottom: 17px; }
   .fs-brand { font-size: 21px; }
-  .fs-header-note { margin-right: 26px; max-width: 110px; text-align: right; line-height: 1.5; font-size: 10px; }
   .fs-steps { gap: 7px; margin-bottom: 7px; }
   .fs-step { flex-direction: column; align-items: center; justify-content: flex-start; gap: 5px; padding: 7px 0 10px; font-size: 10px; }
   .fs-step b { width: 24px; height: 24px; font-size: 10px; border-radius: 7px; }

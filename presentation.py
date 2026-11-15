@@ -1,4 +1,5 @@
 """Fieldsignal을 참고한 표시 전용 요소. 분석·가격·세션 상태를 변경하지 않는다."""
+import base64
 from html import escape
 from pathlib import Path
 import streamlit as st
@@ -10,9 +11,10 @@ def apply_theme():
 
 
 def masthead():
-    st.html('''<header class="fs-header">
-      <h1 class="fs-brand"><span class="fs-mark" aria-hidden="true">&#8635;</span>이어가게</h1>
-      <span class="fs-header-note">물품의 가치를 찾고<br>새로운 시작으로.</span>
+    logo = Path(__file__).parent / 'assets' / 'brand-mark.png'
+    logo_uri = 'data:image/png;base64,' + base64.b64encode(logo.read_bytes()).decode('ascii')
+    st.html(f'''<header class="fs-header">
+      <h1 class="fs-brand"><span class="fs-mark" aria-hidden="true"><img class="fs-brand-logo" src="{logo_uri}" alt="" width="35" height="35"></span>이어가게</h1>
     </header>''')
 
 
@@ -42,7 +44,7 @@ def start_chapter():
 
 
 def footer():
-    st.html('<footer class="fs-footer"><span>이어가게 · 남은 물품의 다음 가능성</span></footer>')
+    st.html('<footer class="fs-footer" aria-hidden="true"></footer>')
 
 
 def estimate_label():
