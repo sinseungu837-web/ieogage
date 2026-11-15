@@ -66,12 +66,16 @@ def map_link(region, query):
     return 'https://map.kakao.com/link/search/' + urllib.parse.quote(f'{region} {query}'.strip())
 
 
+def naver_link(region, query):
+    return 'https://map.naver.com/p/search/' + urllib.parse.quote(f'{region} {query}'.strip())
+
+
 def queries_for(item):
     from reference import item_key
     return QUERIES.get(item_key(item), [FALLBACK_QUERY])
 
 
-def search(item, region, limit=5, key=None, disposal=False):
+def search(item, region, limit=3, key=None, disposal=False):
     """반환: {'ok': bool, 'places': [...], 'queries': [...], 'area': str, 'reason': str}"""
     key = key or api_key()
     queries = [DISPOSAL_QUERY] if disposal else queries_for(item)

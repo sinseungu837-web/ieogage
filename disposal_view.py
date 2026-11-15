@@ -157,7 +157,7 @@ def vendor_section(last, items, estimates):
     region = st.text_input('매장 지역 (구·동)', value=last.get('vendor_region', ''),
                            placeholder='예: 성북구, 마포구 연남동', key=f"vendor_region:{last.get('key', 'current')}")
     last['vendor_region'] = region.strip()
-    st.caption('카카오맵 검색 결과이며 제휴·보증 업체가 아닙니다. 업체 선택과 거래 조건 확인은 직접 해 주세요.')
+    st.caption('추천 업체는 카카오맵 장소 검색으로 찾은 결과이며 제휴·보증 업체가 아닙니다. 업체 선택과 거래 조건 확인은 직접 해 주세요.')
     if last['vendor_region']:
         groups = {}
         for r in items:  # 같은 업체 종류(검색어)끼리 묶어 한 번만 검색
@@ -165,13 +165,20 @@ def vendor_section(last, items, estimates):
         for queries, names in list(groups.items()) + [((vendors.DISPOSAL_QUERY,), ['팔리지 않은 물건·고정 설비 철거'])]:
             disposal = queries == (vendors.DISPOSAL_QUERY,)
             res = _vendor_search(names[0], last['vendor_region'], disposal)
-            st.markdown(f"**{' · '.join(dict.fromkeys(names))}** — 검색: {', '.join(res['queries'])}")
+            title = ' · '.join(dict.fromkeys(names))
             if res['places']:
+                st.markdown(f"**{title}** — 카카오맵에서 '{res['area']}' 근처를 '{'·'.join(res['queries'])}'(으)로 찾아 "
+                            f"{len(res['places'])}곳을 추천합니다.")
                 for p in res['places']:
                     phone = f" · ☎ {p['phone']}" if p['phone'] else ''
-                    st.markdown(f"- [{p['name']}]({p['url']}) ({p['category']}, {p['distance_km']}km){phone}  \n  {p['address']}")
+                    st.markdown(f"- [{p['name']}]({p['url']}) ({p['category']}, {p['distance_km']}km){phone}<br>{p['address']}",
+                                unsafe_allow_html=True)
+            else:
+                st.markdown(f"**{title}**")
             if res['reason']:
                 st.caption(res['reason'])
-            st.caption('지도에서 더 찾기: ' + ' · '.join(f'[{q}]({u})' for q, u in zip(res['queries'], res['links'])))
+            st.markdown('지도에서 직접 찾기: ' + ' · '.join(
+                f"[카카오맵 '{q}']({vendors.map_link(last['vendor_region'], q)}) / [네이버 지도 '{q}']({vendors.naver_link(last['vendor_region'], q)})"
+                for q in res['queries']))
     with st.expander('견적 요청서 (복사해서 여러 업체에 보내기)'):
         st.code(vendors.quote_request(items, estimates), language=None)
