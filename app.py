@@ -277,6 +277,32 @@ def edit_page(last):
     if last['det'].get('truncated'):
         st.caption('물체가 많아 일부 누락될 수 있습니다. 놓친 물건은 직접 추가해 주세요.')
 
+    # 영역을 그리면 바로 아래에서 이름을 넣고 추가 (예전엔 두 번째 탭 안에 있어 "드래그가 안 된다"로 보였음, 2026-11-15)
+    if last.get("pending_box") and mode == "새 물건 영역 그리기":
+        with st.container(border=True):
+            st.success("영역을 선택했습니다. 무엇인지 적고 [추가]를 누르세요. 다시 그리면 영역이 바뀝니다.")
+            q_name = st.text_input("추가할 물건", key=f"quick_add_{last['key']}_{last.get('canvas_revision', 0)}",
+                                   placeholder="예: 테이블, 제빙기, 커피 그라인더")
+            q_add, q_cancel = st.columns(2)
+            if q_add.button("➕ 이 영역에 추가", type="primary", use_container_width=True, key=f"quick_add_btn_{last['key']}"):
+                cleaned_name = normalize_natural_input(q_name)
+                if not cleaned_name:
+                    st.warning("추가할 물건의 이름을 입력해 주세요.")
+                else:
+                    new_id = last["next_id"]
+                    objects.append({"id": new_id, "label": cleaned_name,
+                                    "box": [float(v) for v in last["pending_box"]], "task": "USER"})
+                    box_names[new_id] = cleaned_name
+                    last["next_id"] = new_id + 1
+                    last["pending_box"] = None
+                    last["canvas_revision"] = last.get("canvas_revision", 0) + 1
+                    st.toast(f"[#{new_id}] '{cleaned_name}' 을(를) 추가했습니다.")
+                    st.rerun()
+            if q_cancel.button("영역 지우기", use_container_width=True, key=f"quick_cancel_{last['key']}"):
+                last["pending_box"] = None
+                last["canvas_revision"] = last.get("canvas_revision", 0) + 1
+                st.rerun()
+
     # ---------------- 사용자 직접 수정 / 미탐지 추가 UI ----------------
     with st.container(border=True):
         st.markdown("#### 🛠️ AI 탐지 결과 직접 수정 · 미탐지 물건 추가")
