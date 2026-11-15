@@ -270,8 +270,6 @@ def edit_page(last):
                 st.rerun()
 
 
-    rows = inventory_rows(last)
-    st.caption(f"현재 물품 {len(rows)}종 · 총 {len(box_names)}개 박스")
     if last['det'].get('truncated'):
         st.caption('물체가 많아 일부 누락될 수 있습니다. 놓친 물건은 직접 추가해 주세요.')
 
@@ -314,7 +312,7 @@ def edit_page(last):
     sel_id = st.selectbox("수정할 박스 (사진 위 박스를 눌러도 선택됩니다)", key=f"edit_box_{last['key']}",
                           options=active_ids, index=default_idx, format_func=lambda x: f"[#{x}] {box_names[x]}")
     last["selected_box_id"] = sel_id
-    new_label_raw = st.text_input("올바른 물품명 (자연어로 입력)", value=box_names[sel_id],
+    new_label_raw = st.text_input("올바른 물품명", value=box_names[sel_id],
                                   placeholder="예: 커피 그라인더, 이건 제빙기야", key=f"edit_input_{sel_id}")
     with st.container(key="edit_box_actions"):
         b_rename, b_delete = st.columns(2)
@@ -408,7 +406,7 @@ def photo_page():
                 st.session_state.pop(k, None)
             st.rerun()
         st.image(image, caption='업로드한 사진', use_container_width=True)
-        st.caption('사진이 옆으로 누웠거나 뒤집혀 있으면 똑바로 돌린 뒤 분석하세요.')
+        st.caption('사진이 누워있거나 뒤집힌 경우 아래 버튼을 통해 정정해 주세요')
         with st.container(key='rotate_buttons'):  # 모바일에서도 두 버튼을 한 줄에 (styles/fieldsignal.css)
             rot_left, rot_right = st.columns(2)
             if rot_left.button('↺ 왼쪽으로 90° 돌리기', use_container_width=True):
@@ -648,7 +646,6 @@ def edit_screen():
     last = st.session_state.get('last')
     if not last:
         go_to(2)
-    presentation.section_label(2, '물품 탐색 및 수정')
     edit_page(last)
     with st.container(key='page_actions'):
         left, right = st.columns(2)
@@ -662,7 +659,6 @@ def items_screen():
     last = st.session_state.get('last')
     if not last:
         go_to(2)
-    presentation.section_label(2, '물품 탐색 및 수정')
     edit_inventory_table(last)
     with st.container(key='page_actions'):
         left, right = st.columns(2)
