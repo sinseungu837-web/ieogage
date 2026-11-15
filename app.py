@@ -607,6 +607,7 @@ def final_page(last):
         if priced:
             # 최종 가격 하나만 크게 (계산 과정은 아래 '계산 과정·근거 보기'에서 원할 때만)
             st.markdown(f'### {mid:,}원')
+            st.markdown(f'**참고 범위 {low:,}원 ~ {high:,}원**')
             st.caption(f'가격이 나온 {len(priced)}개 품목 그룹의 예상 중고가 × 개수 합계 · 시세 및 판매처에 따라 차이가 있을 수 있습니다.')
             if len(priced) < selected_count:
                 st.warning(f'부분 견적입니다. 가격 근거 부족 {selected_count - len(priced)}개 품목 그룹은 합계에서 제외했습니다.')
@@ -645,8 +646,10 @@ def final_page(last):
     prices = table[['집기명', '제조사', '개수', '모델명', '연식(년)']].copy()
     prices['개당 예상 중고가 (원)'] = [x['mid'] for x in e]
     prices['수량별 참고 가치 (원)'] = [x['mid'] * c if x['mid'] is not None else None for x, c in zip(e, prices['개수'])]
-    st.dataframe(prices[['집기명', '개수', '개당 예상 중고가 (원)', '수량별 참고 가치 (원)']], hide_index=True, use_container_width=True,
+    prices['개당 범위'] = [f"{x['low'] // 10000:,}~{x['high'] // 10000:,}만" if x['low'] is not None else '' for x in e]
+    st.dataframe(prices[['집기명', '개수', '개당 예상 중고가 (원)', '개당 범위', '수량별 참고 가치 (원)']], hide_index=True, use_container_width=True,
                  column_config={'집기명': st.column_config.TextColumn(width=90),
+                                '개당 범위': st.column_config.TextColumn('범위', width=80),
                                 '개수': st.column_config.NumberColumn('수량', width=48),
                                 '개당 예상 중고가 (원)': st.column_config.NumberColumn('개당(원)', width=95, format='localized'),
                                 '수량별 참고 가치 (원)': st.column_config.NumberColumn('합계(원)', width=100, format='localized')})
@@ -657,10 +660,11 @@ def final_page(last):
             lines = x.get('calc') or [x['source']]
             st.markdown('\n'.join(f'- {line}' for line in lines))
             if not str(r.get('연식(년)', '')).strip():
-                st.caption('연식을 입력하면 신품가 기준 감가로 다시 계산합니다 (2단계 표의 연식(년) 칸).')
-        st.caption('연식 감가 규칙: 1년 차 개봉 감가 -30%, 2년 차부터 매년 1년 차 가격의 10%씩 차감, 최저 신품가의 10%. '
-                   '감가 속도의 근거: 법인세법 시행규칙 [별표5] 기구 및 비품 기준내용연수 5년. '
-                   '신품가는 팀 조사 추정가이며, 개봉 감가 30%는 중고 시장 관행을 반영한 가정값입니다.')
+                st.caption('연식을 입력하면 시세 범위 안에서 위치를 정합니다 (2단계 표의 연식 칸).')
+        st.caption('산정 방식: 모델별 중고 시세 범위(팀 조사: 전문 커뮤니티 장터의 브랜드별 가격 방어율, B2B 중고주방 시세, '
+                   '개인 직거래 시세 종합)를 기본으로, 연식 1년 이하는 범위 상단·5년은 하단·그 사이는 비례 위치, '
+                   '5년 초과는 하단에서 해마다 10%씩 추가 하락(최저 신품가의 10%). 5년 기준: 법인세법 시행규칙 [별표5] 기구 및 비품 기준내용연수. '
+                   '시세는 팀 조사 추정값이며 개별 매물 원문 링크는 없습니다.')
     with st.expander('참고 가격 안내'):
         st.caption('현재 가격은 팀 조사 시세표(품목·제조사·대표 모델별 중고 시세 범위)에서만 냅니다. 모델 → 제조사 → 품목 평균 순서로 찾으며, 개별 매물 원문 링크가 없는 조사값이라 실제 매각액과 다를 수 있습니다. 개당 Q1(25%)·중앙값·Q3(75%) × 수량으로 계산합니다. 유효 표본 3건 미만은 가격 근거 부족으로 표시합니다. '
                    'DB는 최근 180일의 실제 개별 매물만 사용하며 샘플·묶음은 제외합니다. '

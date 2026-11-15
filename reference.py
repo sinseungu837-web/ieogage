@@ -18,10 +18,12 @@ SURVEYED_AT = '2026-11-12'
 # 탐지·사용자 입력 이름 → 시세표 품목 이름
 ALIAS = {'커피머신': '에스프레소 머신', '커피 머신': '에스프레소 머신', '에스프레소머신': '에스프레소 머신',
          '그라인더': '커피 그라인더', '커피그라인더': '커피 그라인더', '상업용 블렌더': '블렌더',
-         '냉장고': '업소용 냉장고', '테이블 냉장고': '업소용 냉장고', '업소용 냉동고': '업소용 냉장고',
-         '쇼케이스': '쇼케이스 냉장고', '디스펜서': '온수기', '핫워터 디스펜서': '온수기',
-         '싱크대': '작업대', '스텐 작업대': '작업대', '스툴': '의자', '카페 의자': '의자',
-         '천장형 에어컨': '에어컨', '냉난방기': '에어컨', '스피커/음향': '스피커'}
+         '냉장고': '업소용 냉장고', '테이블 냉장고': '업소용 냉장고', '업소용 냉동고': '업소용 냉장고', '냉동고': '업소용 냉장고',
+         '수직형 냉장고': '업소용 냉장고', '쇼케이스': '쇼케이스 냉장고', '디스펜서': '온수기', '핫워터 디스펜서': '온수기',
+         '스텐 작업대': '작업대', '스텐 싱크대': '싱크대', '스툴': '의자', '카페 의자': '의자', '카페 테이블': '테이블',
+         '천장형 에어컨': '에어컨', '냉난방기': '에어컨', '스피커/음향': '스피커',
+         'TV': '디지털 메뉴보드', '메뉴판 TV': '디지털 메뉴보드', '메뉴보드': '디지털 메뉴보드', '모니터': '디지털 메뉴보드',
+         '펜던트 조명': '조명', '조명 스탠드': '조명', '포스': '포스기', '콤비 오븐': '오븐'}
 
 
 @lru_cache(maxsize=4)
@@ -88,10 +90,11 @@ def match_model(item, maker, value):
     return ''
 
 
-OPEN_RATE = 0.70      # 1년 차: 개봉 감가 -30% (중고 시장 관행으로 팀이 정한 가정값)
-YEARLY_RATE = 0.10    # 2년 차부터: 1년 차 가격의 10%씩 매년 정액 차감 (기준내용연수 5년 → 연 10%p 가정)
-FLOOR_RATE = 0.10     # 최저: 신품가의 10%
-LIFE_BASIS = '법인세법 시행규칙 [별표5] 구분1 기구 및 비품 기준내용연수 5년'
+RANGE_YEARS = (1.0, 5.0)  # 1년 이하 → 범위 상단, 5년 → 범위 하단 (기구·비품 기준내용연수 5년)
+OVER_RATE = 0.10          # 5년 초과: 범위 하단에서 해마다 10%씩 추가 하락
+FLOOR_RATE = 0.10         # 최저: 신품가의 10%
+LIFE_BASIS = '법인세법 시행규칙 [별표5] 기구 및 비품 기준내용연수 5년'
+DATA_BASIS = '팀 조사 시세 (전문 커뮤니티 장터의 브랜드별 가격 방어율 · B2B 중고주방 시세 · 개인 직거래 시세 종합)'
 
 
 def parse_years(value):
@@ -105,75 +108,68 @@ def parse_years(value):
     return float(m.group()) if m else None
 
 
-def age_price(new_price, years):
-    """신품가 × 연식 감가. 반환: (중고가, 계산 단계 문구들)."""
-    y = max(0.0, years)
-    v1 = new_price * OPEN_RATE
-    extra = max(0.0, y - 1)
-    value = max(new_price * FLOOR_RATE, v1 * (1 - YEARLY_RATE * extra))
-    steps = [f"신품가 {new_price:,.0f}원",
-             f"1년 차 개봉 감가 -{1 - OPEN_RATE:.0%} → {v1:,.0f}원"]
-    if extra:
-        steps.append(f"{y:g}년 사용: 2년 차부터 매년 1년 차 가격의 {YEARLY_RATE:.0%}씩 {extra:g}년 차감 "
-                     f"(-{v1 - value:,.0f}원)")
-    if value == new_price * FLOOR_RATE and extra:
-        steps.append(f"최저 가격(신품가의 {FLOOR_RATE:.0%}) 적용")
-    return int(round(value, -3)), steps
+def position_by_age(low, high, years, new_price=None):
+    """연식으로 시세 범위 안의 대표가를 정한다 (범위 위로는 벗어나지 않음). 반환: (대표가, 하한, 상한, 설명)."""
+    y1, y5 = RANGE_YEARS
+    if years <= y1:
+        return high, low, high, f'연식 {years:g}년(1년 이하) → 시세 범위 상단'
+    if years <= y5:
+        mid = high - (high - low) * (years - y1) / (y5 - y1)
+        return int(round(mid, -3)), low, high, f'연식 {years:g}년 → 1년(상단)~5년(하단) 사이 비례 위치'
+    factor = max(0.0, 1 - OVER_RATE * (years - y5))
+    floor = int(new_price * FLOOR_RATE) if new_price else 0
+    lo2, hi2 = max(floor, int(low * factor)), max(floor, int(low))
+    mid = max(floor, int(round(low * factor, -3)))
+    note = f'연식 {years:g}년(5년 초과) → 범위 하단에서 해마다 {OVER_RATE:.0%}씩 추가 하락'
+    if floor and mid == floor:
+        note += f', 최저 신품가의 {FLOOR_RATE:.0%} 적용'
+    return mid, min(lo2, mid), max(hi2, mid), note
 
 
 def estimate(name, manufacturer='', model='', spec='', years=None):
-    """모델 → 제조사 → 품목 순서로 시세표 행을 고른다. 시세표에 없는 품목이면 None.
-    years 가 있고 신품가가 있으면 '신품가 × 연식 감가'로 중고가 1개를 낸다."""
+    """모델 → 제조사 → 품목 순서로 시세표 행을 고르고, 시세 범위(하한~상한)와 대표가를 낸다.
+    연식이 있으면 범위 안에서 위치를 정하고, 없으면 범위 중간값. 시세표에 없는 품목이면 None."""
     rs = candidates(name)
     if not rs:
         return None
     maker = match_maker(name, manufacturer)
     exact = match_model(name, maker, model)
     if exact:
-        sel, match, conf = [r for r in rs if r['model'] == exact], '동일 모델 (팀 조사 시세표)', '보통'
+        sel, match, conf = [r for r in rs if r['model'] == exact], '동일 모델', '보통'
     elif maker:
-        sel, match, conf = [r for r in rs if r['manufacturer'] == maker], '동일 제조사 대표 모델 (팀 조사 시세표)', '낮음'
+        sel, match, conf = [r for r in rs if r['manufacturer'] == maker], '동일 제조사 모델 평균', '낮음'
     else:
-        sel, match, conf = rs, '품목 대표 모델 평균, 제조사 미확인 (팀 조사 시세표)', '낮음'
+        sel, match, conf = rs, '품목 전체 모델 평균 (제조사 미확인)', '낮음'
     if spec and len(sel) > 1:
         same = [r for r in sel if r['spec'] and listings.spec_key(r['spec']) == listings.spec_key(spec)]
         sel = same or sel
-    priced = [r for r in sel if r['new_price']]
-    if years is not None and priced:
-        new = int(statistics.median(r['new_price'] for r in priced))
-        value, steps = age_price(new, years)
-        basis = (f"{priced[0]['manufacturer']} {priced[0]['model']} 신품가" if len(priced) == 1
-                 else f"{match.split(' (')[0]} {len(priced)}개 모델 신품가 중앙값")
-        return {'low': value, 'mid': value, 'high': value, 'n': len(priced), 'price_basis': 'reference',
-                'confidence': conf, 'match': match.replace('팀 조사 시세표', '신품가 × 연식 감가'),
-                'collected_at': SURVEYED_AT,
-                'source': f"{basis} × 연식 {years:g}년 감가 · 근거: {LIFE_BASIS}",
-                'calc': [f"기준: {basis}"] + steps + [f"예상 중고가 {value:,}원"],
-                'search_url': 'https://search.daum.net/search?q=' + re.sub(r'\s+', '+', f'{name} 중고'),
-                'evidence': [{'title': f"{r['manufacturer']} {r['model']}", 'price': r['new_price'],
-                              'source': '팀 조사 시세표 신품 추정가'} for r in priced]}
-    note = ([f"신품가 미조사 모델이라 연식 감가를 적용하지 못함 → 팀 조사 중고 게시가 사용"] if years is not None else [])
-    if len(sel) > 1 and all(r['used_low'] == r['used_high'] for r in sel):
-        # 게시가 1건씩인 행 여러 개 (통합 시세표) → 가격들의 Q1·중앙값·Q3 로 범위
-        vals = sorted(r['used_low'] for r in sel)
-        q1, _, q3 = statistics.quantiles(vals, n=4, method='inclusive')
-        low, mid, high = int(q1), int(statistics.median(vals)), int(q3)
-    else:
+    if len(sel) == 1:
+        low, high = sel[0]['used_low'], sel[0]['used_high']
+    else:  # 여러 모델: 하한들의 하위 25%~상한들의 상위 25% 대신 중앙값으로 (이상치 영향 줄임)
         low = int(statistics.median(r['used_low'] for r in sel))
         high = int(statistics.median(r['used_high'] for r in sel))
-        mid = int(statistics.median((r['used_low'] + r['used_high']) / 2 for r in sel))
+        low, high = min(low, high), max(low, high)
+    news = [r['new_price'] for r in sel if r['new_price']]
+    new = int(statistics.median(news)) if news else None
+    basis = (f"{sel[0]['manufacturer']} {sel[0]['model']}" if len(sel) == 1 else f"{match} {len(sel)}개 모델")
+    calc = [f"기준: {basis}" + (f" (신품가 {new:,}원)" if new else ""),
+            f"중고 시세 범위: {low:,} ~ {high:,}원" + (f" · {sel[0]['note']}" if len(sel) == 1 and sel[0]['note'] else "")]
+    if years is not None:
+        mid, low, high, how = position_by_age(low, high, years, new)
+        calc.append(how)
+    else:
+        mid = int(round((low + high) / 2, -3))
+        calc.append('연식 미입력 → 범위 중간값 (2단계 표에 연식을 넣으면 범위 안에서 위치를 정합니다)')
     mid = min(max(mid, low), high)
-    sources = sorted({s.strip() for r in sel for s in r['survey_sources'].split(',') if s.strip()})
+    calc.append(f"예상 중고가 {mid:,}원 (범위 {low:,} ~ {high:,}원)")
+    calc.append(f"근거: {DATA_BASIS}")
     return {'low': low, 'mid': mid, 'high': high, 'n': len(sel), 'price_basis': 'reference',
-            'confidence': conf, 'match': match, 'collected_at': SURVEYED_AT,
-            'calc': note + [f"기준: {match}",
-                            "팀 조사 중고 게시가 " + ", ".join(r['manufacturer'] + ' ' + r['model'] + ' ' + format(r['used_low'], ',') + '원' for r in sel),
-                            f"예상 중고가 {mid:,}원" + (f" (범위 {low:,} ~ {high:,}원)" if low != high else "")],
-            'source': f"팀 조사 시세표 {len(sel)}개 모델 · 개별 매물 원문 링크 없음 · 조사 출처: {', '.join(sources)}",
-            'search_url': 'https://search.daum.net/search?q=' + re.sub(r'\s+', '+', f'{name} 중고'),
+            'confidence': conf, 'match': match + ' (팀 조사 시세표)', 'collected_at': SURVEYED_AT,
+            'source': f"{DATA_BASIS} · {basis}", 'calc': calc,
+            'search_url': 'https://search.daum.net/search?q=' + re.sub(r'\s+', '+', f"{basis} 중고"),
             'evidence': [{'title': f"{r['manufacturer']} {r['model']}", 'price': (r['used_low'] + r['used_high']) // 2,
                           '중고 시세 범위': f"{r['used_low']:,} ~ {r['used_high']:,}", '신품 추정가': r['new_price'],
-                          'source': '팀 조사 시세표', '조사 출처': r['survey_sources'], '비고': r['note']} for r in sel]}
+                          'source': '팀 조사 시세표', '비고': r['note']} for r in sel]}
 
 
 def prompt_table():
