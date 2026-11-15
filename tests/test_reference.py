@@ -56,8 +56,10 @@ class DetectFilterTest(unittest.TestCase):
             {'name': '제빙기', 'box_2d': [600, 600, 900, 900], 'brand': '없는회사', 'model': 'X'},
         ])
         labels = [o['label'] for o in det['objects']]
-        self.assertNotIn('화분', labels)
-        machine, chair1, chair2, ice = det['objects']
+        self.assertIn('화분', labels)  # 시세표에 없는 물건도 목록에 남김 (2026-11-15), 제조사는 비움
+        pot = next(o for o in det['objects'] if o['label'] == '화분')
+        self.assertEqual(pot['brand'], '')
+        machine, chair1, chair2, ice = [o for o in det['objects'] if o['label'] != '화분']
         self.assertEqual((machine['brand'], machine['model'], machine['brand_basis'], machine['spec']),
                          ('훼마', 'E98 UP 2그룹', '로고', '2그룹'))
         self.assertEqual((chair1['brand'], chair2['brand']), ('톤', '톨릭스'))  # 다르게 생긴 의자 → 다른 제조사
