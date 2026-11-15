@@ -573,7 +573,6 @@ def sale_screen():
     last = st.session_state.get('last')
     if not last:
         go_to(2)
-    presentation.section_label(4, '판매 준비')
     st.header('나의 물품 이어가기')
     st.caption('물품을 확인하고, 판매처를 알고 싶은 물품의 [확인하기] 버튼을 눌러 주세요.')
     region = st.text_input('현재 가게의 소재지를 입력해 주세요 (지역명 또는 주소)', value=last.get('vendor_region', ''),
@@ -611,7 +610,6 @@ def vendor_screen():
         go_to(6)
     import vendors
     item, region = last['vendor_item'], last.get('vendor_region', '')
-    presentation.section_label(4, '판매 준비')
     res = cached_vendor_search(item['집기명'], region)
     st.caption(f"{res['area']} 기준")
     st.header(f"[{item['집기명']}] 판매처를 추천해 드려요")
