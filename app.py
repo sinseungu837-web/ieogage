@@ -406,7 +406,7 @@ def photo_page():
                 st.session_state.pop(k, None)
             st.rerun()
         st.image(image, caption='업로드한 사진', use_container_width=True)
-        st.caption('사진이 옆으로 누웠거나 뒤집혀 있으면 똑바로 돌린 뒤 분석하세요.')
+        st.caption('사진이 누워있거나 뒤집힌 경우 아래 버튼을 통해 정정해 주세요')
         with st.container(key='rotate_buttons'):  # 모바일에서도 두 버튼을 한 줄에 (styles/fieldsignal.css)
             rot_left, rot_right = st.columns(2)
             if rot_left.button('↺ 왼쪽으로 90° 돌리기', use_container_width=True):
