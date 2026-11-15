@@ -131,6 +131,8 @@ def results(last, rows, estimates, states):
                 st.dataframe(table, hide_index=True, use_container_width=True)
             st.download_button('물품 목록 CSV 내려받기', table.to_csv(index=False).encode('utf-8-sig'),
                 file_name=f'이어가게_{method}.csv', key='export:' + method)
+            if method == '전문업체 매각':
+                vendor_section(last, items, [lookup[row_key(r)] for r in items])
             if method == '개인 중고거래':
                 for row in items:
                     with st.expander(f"{row['집기명']} · {row.get('제조사', '')} · {row['개수']}개 판매글"):
@@ -140,3 +142,36 @@ def results(last, rows, estimates, states):
             for key, state in last['disposal_archive'].items():
                 st.text(f'이전 객체 ID: {key}')
                 st.code(state['title'] + '\n\n' + state['body'], language=None)
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _vendor_search(item, region, disposal=False):
+    import vendors
+    return vendors.search(item, region, disposal=disposal)
+
+
+def vendor_section(last, items, estimates):
+    """전문업체 찾기: 지역 → 물품별 근처 업체(카카오맵) + 견적 요청서. 알선·보증 아님."""
+    import vendors
+    st.markdown('#### 근처 전문업체 찾기')
+    region = st.text_input('매장 지역 (구·동)', value=last.get('vendor_region', ''),
+                           placeholder='예: 성북구, 마포구 연남동', key=f"vendor_region:{last.get('key', 'current')}")
+    last['vendor_region'] = region.strip()
+    st.caption('카카오맵 검색 결과이며 제휴·보증 업체가 아닙니다. 업체 선택과 거래 조건 확인은 직접 해 주세요.')
+    if last['vendor_region']:
+        groups = {}
+        for r in items:  # 같은 업체 종류(검색어)끼리 묶어 한 번만 검색
+            groups.setdefault(tuple(vendors.queries_for(r['집기명'])), []).append(r['집기명'])
+        for queries, names in list(groups.items()) + [((vendors.DISPOSAL_QUERY,), ['팔리지 않은 물건·고정 설비 철거'])]:
+            disposal = queries == (vendors.DISPOSAL_QUERY,)
+            res = _vendor_search(names[0], last['vendor_region'], disposal)
+            st.markdown(f"**{' · '.join(dict.fromkeys(names))}** — 검색: {', '.join(res['queries'])}")
+            if res['places']:
+                for p in res['places']:
+                    phone = f" · ☎ {p['phone']}" if p['phone'] else ''
+                    st.markdown(f"- [{p['name']}]({p['url']}) ({p['category']}, {p['distance_km']}km){phone}  \n  {p['address']}")
+            if res['reason']:
+                st.caption(res['reason'])
+            st.caption('지도에서 더 찾기: ' + ' · '.join(f'[{q}]({u})' for q, u in zip(res['queries'], res['links'])))
+    with st.expander('견적 요청서 (복사해서 여러 업체에 보내기)'):
+        st.code(vendors.quote_request(items, estimates), language=None)
