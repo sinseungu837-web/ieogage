@@ -10,7 +10,7 @@
   --fs-sand: #e3ca9e;
   --fs-line: rgba(23, 25, 22, .14);
 }
-.stApp, [data-testid="stAppViewContainer"] { background: var(--fs-paper); color: var(--fs-ink); }
+.stApp, [data-testid="stAppViewContainer"] { background: #ffffff; color: var(--fs-ink); }  /* 배경 흰색 (2026-11-15 팀 요청) */
 html, body, .stApp, button, input, textarea {
   font-family: "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Helvetica Neue", sans-serif;
 }
