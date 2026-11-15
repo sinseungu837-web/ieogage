@@ -510,7 +510,6 @@ def disposal_rows(last):
 
 
 def final_page(last):
-    presentation.section_label(3, '최종 견적 확인')
     st.header('우리 가게가 이어갈 가치')
     rows, fixed, supplies = priced_rows(last)
     with st.spinner('시세표에서 가격을 찾는 중...'):
