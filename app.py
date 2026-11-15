@@ -481,21 +481,18 @@ def photo_page():
         image = draft['image']
         st.image(image, caption='분석할 사진', use_container_width=True)
         st.caption('사진이 옆으로 누웠거나 뒤집혀 있으면 똑바로 돌린 뒤 분석하세요.')
-        rot_left, rot_right = st.columns(2)
-        if rot_left.button('↺ 왼쪽으로 90° 돌리기', use_container_width=True):
-            draft['image'] = image.rotate(90, expand=True)
-            st.rerun()
-        if rot_right.button('↻ 오른쪽으로 90° 돌리기', use_container_width=True):
-            draft['image'] = image.rotate(-90, expand=True)
-            st.rerun()
+        with st.container(key='rotate_buttons'):  # 모바일에서도 두 버튼을 한 줄에 (styles/fieldsignal.css)
+            rot_left, rot_right = st.columns(2)
+            if rot_left.button('↺ 왼쪽으로 90° 돌리기', use_container_width=True):
+                draft['image'] = image.rotate(90, expand=True)
+                st.rerun()
+            if rot_right.button('↻ 오른쪽으로 90° 돌리기', use_container_width=True):
+                draft['image'] = image.rotate(-90, expand=True)
+                st.rerun()
         import hashlib
-        modes = list(llm.COUNT_MODES)
-        count_mode = st.radio('개수 세는 방식', modes, format_func=llm.COUNT_MODES.get, horizontal=True,
-                              index=modes.index(st.session_state.get('count_mode', 'dedupe')),
-                              help='중복 제거: 같은 물건을 두 번 세지 않도록 확실히 보이는 것만 셉니다. '
-                                   '보이는 대로 모두: 일부만 보이거나 가려진 물건까지 모두 셉니다 (과다 집계 가능).')
-        st.session_state.count_mode = count_mode
-        key = hashlib.md5(image.tobytes() + count_mode.encode()).hexdigest()  # 방식이 바뀌면 새로 분석
+        # 개수 세는 방식 선택은 팀 요청으로 화면에서 제거 (2026-11-15). 중복 제거 규칙 하나로 고정
+        count_mode = 'dedupe'
+        key = hashlib.md5(image.tobytes()).hexdigest()
         already = st.session_state.get('last', {}).get('key') == key
         if already:
             st.caption('이 사진의 분석 결과가 있습니다. 기존 수정 내용을 이어서 확인할 수 있어요.')

@@ -127,3 +127,9 @@ iframe[title="box_selector.box_selector"] { border-radius: 18px; border: 1px sol
   [data-testid="stTabs"] [role="tablist"] { gap: 10px; }
   .st-key-page_actions { position: static; padding-bottom: env(safe-area-inset-bottom, 0px); }
 }
+
+/* 사진 회전 버튼: 기기 폭과 관계없이 두 버튼을 한 줄에 반씩, 글자는 화면 폭에 맞춰 줄어들며 한 줄 유지 (2026-11-15) */
+.st-key-rotate_buttons [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: clamp(6px, 2vw, 16px) !important; }
+.st-key-rotate_buttons [data-testid="stColumn"] { min-width: 0 !important; width: auto !important; flex: 1 1 0 !important; }
+.st-key-rotate_buttons button { padding-left: clamp(4px, 1.5vw, 16px) !important; padding-right: clamp(4px, 1.5vw, 16px) !important; }
+.st-key-rotate_buttons button p { font-size: clamp(11px, 3.3vw, 16px) !important; white-space: nowrap !important; overflow: hidden; text-overflow: ellipsis; }
