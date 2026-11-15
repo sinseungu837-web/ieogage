@@ -154,3 +154,17 @@ class AgePriceTest(unittest.TestCase):
         e = reference.estimate('의자', '톨릭스', '', '', 3)
         self.assertEqual(e['mid'], 50000)
         self.assertIn('신품가 미조사', e['calc'][0])
+
+
+class ExcludeStructureTest(unittest.TestCase):
+    def test_people_and_building_removed_but_mounted_items_kept(self):
+        names = ['사람', '벽', '천장', '창문', '천장형 에어컨', '벽걸이 TV', '의자']
+        items = [{'name': n, 'box_2d': [100, i * 120, 300, i * 120 + 100], 'brand': ''} for i, n in enumerate(names)]
+        resp = SimpleNamespace(text=json.dumps({'items': items}, ensure_ascii=False))
+        with patch('llm._generate', return_value=resp), patch('llm._model', return_value='m'):
+            labels = [o['label'] for o in llm.detect_all(Image.new('RGB', (1000, 1000)))[0]['objects']]
+        for gone in ('사람', '벽', '천장', '창문'):
+            self.assertNotIn(gone, labels)
+        self.assertIn('의자', labels)
+        self.assertIn('벽걸이 TV', labels)
+        self.assertEqual(len(labels), 3)  # 천장형 에어컨(시세표 이름 '에어컨'으로 통일 가능)·벽걸이 TV·의자
