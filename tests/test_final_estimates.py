@@ -80,7 +80,7 @@ ns['final_page'](last)
             page = self.render()
         self.assertEqual(len(page.exception), 0)
         self.assertTrue(any('— 원' in value.value for value in page.markdown))
-        prices = page.dataframe[1].value
+        prices = page.dataframe[0].value
         self.assertTrue(prices['개당 예상 중고가 (원)'].isna().all())
         # 근거는 '계산 과정·근거 보기' 펼침 안에 표시
         self.assertTrue(any('가격 근거 부족' in value.value for value in page.markdown))
@@ -93,11 +93,11 @@ ns['final_page'](last)
         with patch.object(price, 'estimate', side_effect=lookup), patch.object(price, 'empty_estimate', side_effect=AssertionError('호출 금지')):
             page = self.render()
         self.assertEqual(len(page.exception), 0)
-        prices = page.dataframe[1].value
+        prices = page.dataframe[0].value
         self.assertEqual(prices.iloc[0]['개당 예상 중고가 (원)'], 150000)
         self.assertTrue(math.isnan(prices.iloc[1]['개당 예상 중고가 (원)']))
-        self.assertTrue(any('부분 견적' in value.value for value in page.warning))
-        self.assertTrue(any('### 150,000원' in value.value for value in page.markdown))  # 최종 가격 하나만 표시
+        self.assertTrue(any('합계에서 제외' in value.value for value in page.warning))
+        self.assertTrue(any('### 약 150,000원' in value.value for value in page.markdown))  # 대표가 + 범위
 
     def test_empty_real_db_without_api_key(self):
         # 실제 DB 에 매물이 쌓였으므로, '빈 DB + 키 없음' 조건은 존재하지 않는 임시 경로로 재현한다.
@@ -106,7 +106,7 @@ ns['final_page'](last)
                 patch.object(listings, 'LISTINGS', ROOT / 'data' / '_empty_for_test.csv'):
             page = self.render()
         self.assertEqual(len(page.exception), 0)
-        self.assertTrue(page.dataframe[1].value['개당 예상 중고가 (원)'].isna().all())
+        self.assertTrue(page.dataframe[0].value['개당 예상 중고가 (원)'].isna().all())
 
 
 if __name__ == '__main__':

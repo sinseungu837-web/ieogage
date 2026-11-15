@@ -74,3 +74,9 @@ def native_photo_inputs():
     fix();
     new MutationObserver(fix).observe(doc.body, {childList: true, subtree: true});
     </script>""", height=0)
+
+
+
+def step_list(labels):
+    items = ''.join(f'<li><b>Step {i}</b><span>{escape(label)}</span></li>' for i, label in enumerate(labels, 1))
+    st.html(f'<ol class="fs-step-list">{items}</ol>')

@@ -233,15 +233,13 @@ def edit_page(last):
     )
     objects: list[dict] = last["det"]["objects"]
 
-    st.subheader("인식된 집기 (클릭하여 직접 수정·추가 가능)")
-    st.caption(
-        "💡 **잘못 인식된 박스**나 **AI가 놓친 물건**이 있나요? "
-        "기존 박스는 눌러 수정하고, 놓친 물건은 영역을 드래그해 추가할 수 있습니다."
-    )
-
+    st.header("분석된 물품을 확인하고, 수정해 주세요")
+    st.caption("아래 사진은 AI가 판매할 수 있는 물품의 영역을 탐지한 것입니다.")
     mode = st.radio(
-        "사진 조작", ["기존 박스 선택", "새 물건 영역 그리기"], horizontal=True,
+        "물품 수정", ["기존 박스 선택", "새 물건 영역 그리기"], horizontal=True,
         key=f"canvas_mode_{last['key']}",
+        format_func=lambda m: "기존 영역 수정 : 사진 위 박스를 눌러 선택" if m == "기존 박스 선택"
+        else "새로운 영역 추가 : 사진 위에 사각형을 그려 추가",
     )
     pending_box = last.get("pending_box")
     rendered_img = draw_boxes(
@@ -303,99 +301,34 @@ def edit_page(last):
                 last["canvas_revision"] = last.get("canvas_revision", 0) + 1
                 st.rerun()
 
-    # ---------------- 사용자 직접 수정 / 미탐지 추가 UI ----------------
-    with st.container(border=True):
-        st.markdown("#### 🛠️ AI 탐지 결과 직접 수정 · 미탐지 물건 추가")
-        tab_edit, tab_add = st.tabs([
-            "✏️ 잘못 감지된 물건 수정 / 삭제",
-            "➕ 감지 못한 물건 직접 추가 (자연어 입력)",
-        ])
-
-        # 탭 1: 기존에 잡힌 박스 이름 변경 또는 삭제
-        with tab_edit:
-            active_ids = sorted(box_names.keys())
-            if not active_ids:
-                st.info("현재 표시된 집기 박스가 없습니다. 오른쪽 탭에서 새 물건을 추가해 보세요.")
-            else:
-                default_idx = (
-                    active_ids.index(last["selected_box_id"])
-                    if last.get("selected_box_id") in active_ids
-                    else 0
-                )
-                sel_id = st.selectbox(
-                    "수정하거나 삭제할 박스 번호([#번호])를 선택하세요 (사진 위 박스를 직접 클릭해도 선택됩니다)",
-                    key=f"edit_box_{last['key']}",
-                    options=active_ids,
-                    index=default_idx,
-                    format_func=lambda x: f"[#{x}] {box_names[x]}",
-                )
-                last["selected_box_id"] = sel_id
-
-                col_in, col_btn1, col_btn2 = st.columns([3, 1, 1])
-                with col_in:
-                    new_label_raw = st.text_input(
-                        "올바른 품목명을 자연어로 입력하세요",
-                        value=box_names[sel_id],
-                        placeholder="예: 커피 그라인더, 이건 제빙기야, 에스프레소 머신으로 변경",
-                        key=f"edit_input_{sel_id}",
-                    )
-                with col_btn1:
-                    st.write("")
-                    st.write("")
-                    if st.button("이름 수정", type="primary", use_container_width=True):
-                        cleaned = normalize_natural_input(new_label_raw)
-                        if cleaned:
-                            box_names[sel_id] = cleaned
-                            st.toast(f"[#{sel_id}] 품목이 '{cleaned}'(으)로 수정되었습니다!")
-                            st.rerun()
-                with col_btn2:
-                    st.write("")
-                    st.write("")
-                    if st.button("박스 삭제", use_container_width=True):
-                        removed_name = box_names.pop(sel_id, "")
-                        last["selected_box_id"] = None
-                        st.toast(f"[#{sel_id}] '{removed_name}' 박스를 삭제했습니다.")
-                        st.rerun()
-
-        # 탭 2: AI가 놓친 물건을 클릭 + 자연어로 새로 추가
-        with tab_add:
-            st.caption("위 사진에서 ‘새 물건 영역 그리기’를 선택한 뒤, 마우스나 손가락으로 물건을 감싸는 사각형을 그려 주세요. 기존 박스와 겹쳐도 추가할 수 있습니다.")
-            if pending_box:
-                st.success("영역이 선택되었습니다. 품목명을 입력해 추가하세요. 다시 그리면 영역이 바뀝니다.")
-                if st.button("선택 영역 지우기"):
-                    last["pending_box"] = None
-                    last["canvas_revision"] = last.get("canvas_revision", 0) + 1
-                    st.rerun()
-            else:
-                st.info("먼저 사진 위에서 추가할 물건의 영역을 그려 주세요.")
-
-            add_col1, add_col2 = st.columns([3, 1])
-            with add_col1:
-                natural_add_text = st.text_input(
-                    "추가할 물건을 자연어로 적어주세요",
-                    placeholder="예: 커피 그라인더, 카운터 위 제빙기 추가해줘, 에스프레소 머신",
-                    key="natural_add_input",
-                )
-            with add_col2:
-                st.write("")
-                st.write("")
-                if st.button("➕ 이 위치에 추가", type="primary", use_container_width=True):
-                    cleaned_name = normalize_natural_input(natural_add_text)
-                    if not cleaned_name:
-                        st.warning("추가할 물건의 이름을 입력해 주세요!")
-                    elif not pending_box:
-                        st.warning("사진 위에서 추가할 물건의 영역을 먼저 그려 주세요.")
-                    else:
-                        new_id = last["next_id"]
-                        box = pending_box
-                        objects.append({"id": new_id, "label": cleaned_name, "box": [float(v) for v in box], "task": "USER"})
-                        box_names[new_id] = cleaned_name
-                        last["next_id"] = new_id + 1
-                        last["pending_box"] = None
-                        last["canvas_revision"] = last.get("canvas_revision", 0) + 1
-                        st.toast(f"[#{new_id}] '{cleaned_name}' 을(를) 추가했습니다.")
-                        st.rerun()
-
+    if mode == "새 물건 영역 그리기":
+        if not last.get("pending_box"):
+            st.info("사진 위에서 추가할 물건을 감싸도록 사각형을 그려 주세요.")
+        return
+    # ① 기존 영역 수정: 박스 선택 → 자연어로 이름 수정 / 박스 삭제
+    active_ids = sorted(box_names.keys())
+    if not active_ids:
+        st.info("표시된 물품 박스가 없습니다. '새로운 영역 추가'로 물품을 추가해 주세요.")
+        return
+    default_idx = active_ids.index(last["selected_box_id"]) if last.get("selected_box_id") in active_ids else 0
+    sel_id = st.selectbox("수정할 박스 (사진 위 박스를 눌러도 선택됩니다)", key=f"edit_box_{last['key']}",
+                          options=active_ids, index=default_idx, format_func=lambda x: f"[#{x}] {box_names[x]}")
+    last["selected_box_id"] = sel_id
+    new_label_raw = st.text_input("올바른 물품명 (자연어로 입력)", value=box_names[sel_id],
+                                  placeholder="예: 커피 그라인더, 이건 제빙기야", key=f"edit_input_{sel_id}")
+    with st.container(key="edit_box_actions"):
+        b_rename, b_delete = st.columns(2)
+        if b_rename.button("이름 수정", type="primary", use_container_width=True):
+            cleaned = normalize_natural_input(new_label_raw)
+            if cleaned:
+                box_names[sel_id] = cleaned
+                st.toast(f"[#{sel_id}] 품목이 '{cleaned}'(으)로 수정되었습니다.")
+                st.rerun()
+        if b_delete.button("박스 삭제", use_container_width=True):
+            removed_name = box_names.pop(sel_id, "")
+            last["selected_box_id"] = None
+            st.toast(f"[#{sel_id}] '{removed_name}' 박스를 삭제했습니다.")
+            st.rerun()
 
 
 def go_to(step):
@@ -409,6 +342,8 @@ def apply_inventory_edit(last, rows, widget_key):
         row = rows[int(index)]
         name = str(fields.get('집기명', row['집기명']) or '').strip()
         maker = str(fields.get('제조사', row['제조사']) or '').strip()
+        if '개수' in fields and fields['개수']:
+            last.setdefault('count_override', {})[row['box_ids'][0]] = max(1, int(fields['개수']))
         for oid in row['box_ids']:
             if name:
                 last['box_names'][oid] = name
@@ -428,25 +363,19 @@ def start_page():
         with artwork:
             presentation.hero_visual()
         with story:
-            presentation.section_label(1, '남은 집기의 다음 가능성')
-            st.header('남은 집기, 다음 가게로 이어주세요')
-            st.write('매장 사진을 올리면 AI가 집기를 정리합니다. 결과를 직접 고친 뒤 최종 목록을 확인하세요.')
-            presentation.service_facts()
-    presentation.start_chapter()
+            st.header('이어가게')
+            st.markdown('**남은 집기, 다음 가게로 이어주세요**')
+            st.caption('폐업하는 카페의 집기를 사진 한 장으로 정리하고, 예상 가격과 근처 판매처까지 알려 드립니다.')
+            presentation.step_list(['사진 업로드', '물품 탐색 및 수정', '최종 견적 확인', '판매 준비'])
     with st.container(key='start_actions'):
-        upload, camera = st.columns(2)
-        if upload.button('📷 사진 올려 시작하기', type='primary', use_container_width=True):
-            st.session_state.input_method = '사진 올리기'
+        if st.button('⇨ 이어가기', type='primary', use_container_width=True):
             go_to(2)
-        if camera.button('📸 카메라로 시작하기', use_container_width=True):
-            st.session_state.input_method = '카메라로 찍기'
-            go_to(2)
-        if st.session_state.get('last') and st.button('이전 분석 이어서 수정하기'):
+        if st.session_state.get('last') and st.button('이전 분석 이어서 보기', use_container_width=True):
             go_to(3)
 
 
 def photo_page():
-    presentation.section_label(1, '사진 입력')
+    presentation.section_label(1, '사진 업로드')
     st.header('사진을 준비해 주세요')
     st.caption('집기가 잘 보이도록 매장을 넓게 찍어 주세요. JPG·PNG·HEIC(iPhone), 최대 10MB')
     methods = ['사진 올리기', '카메라로 찍기']
@@ -479,7 +408,12 @@ def photo_page():
     draft = st.session_state.get('photo_draft')
     if draft:
         image = draft['image']
-        st.image(image, caption='분석할 사진', use_container_width=True)
+        if st.button('✕ 사진 지우기', key='clear_photo', help='다른 사진을 올리려면 지우고 다시 선택하세요.'):
+            st.session_state.pop('photo_draft', None)
+            for k in ('photo_upload', 'camera_upload'):
+                st.session_state.pop(k, None)
+            st.rerun()
+        st.image(image, caption='업로드한 사진', use_container_width=True)
         st.caption('사진이 옆으로 누웠거나 뒤집혀 있으면 똑바로 돌린 뒤 분석하세요.')
         with st.container(key='rotate_buttons'):  # 모바일에서도 두 버튼을 한 줄에 (styles/fieldsignal.css)
             rot_left, rot_right = st.columns(2)
@@ -497,38 +431,70 @@ def photo_page():
         if already:
             st.caption('이 사진의 분석 결과가 있습니다. 기존 수정 내용을 이어서 확인할 수 있어요.')
         limit = st.session_state.get('runs', 0) >= MAX_RUNS_PER_SESSION
-        if st.button('분석 결과 이어보기' if already else 'AI 분석하기 →', type='primary', disabled=limit and not already):
-            if already:
-                go_to(3)
-            if not llm.get_api_key():
-                st.error('서버에 AI 키가 설정되지 않았습니다. 관리자에게 문의하세요.')
-            else:
-                analyze_photo(image, key, count_mode)
+        with st.container(key='page_actions'):
+            back, run = st.columns(2)
+            if back.button('← 이전 화면', use_container_width=True):
+                go_to(1)
+            if run.button('분석 결과 이어보기 →' if already else 'AI 분석하기 →', type='primary',
+                          use_container_width=True, disabled=limit and not already):
+                if already:
+                    go_to(3)
+                if not llm.get_api_key():
+                    st.error('서버에 AI 키가 설정되지 않았습니다. 관리자에게 문의하세요.')
+                else:
+                    analyze_photo(image, key, count_mode)
         if limit:
             st.warning('이 화면에서 가능한 분석 횟수를 모두 사용했습니다.')
-    if st.button('← 시작 화면'):
-        go_to(1)
+    else:
+        if st.button('← 이전 화면'):
+            go_to(1)
 
 
 def edit_inventory_table(last):
-    st.subheader('집기 목록 수정')
-    st.caption('제조사·모델명은 AI가 팀 조사 시세표의 후보 중에서 예측한 값입니다 (로고가 안 보이면 형태로 예측). 틀리면 직접 고쳐 주세요. 집기명·제조사·모델명을 수정할 수 있습니다. **연식(년)** 칸에 몇 년 사용했는지 숫자로 적으면 신품가에서 연식만큼 감가한 중고가를 계산합니다 (1년 미만은 0.5). 개수는 박스 추가·삭제에 맞춰 자동으로 계산됩니다.')
+    st.header('분석된 물품을 확인하고, 수정해 주세요')
+    st.caption('아래 표는 AI가 정리한 물품 목록입니다. 올바르게 입력되었는지 확인하고, 물품의 연식을 입력해 주세요. '
+               '제조사·모델명은 AI가 시세표 후보 중에서 예측한 값입니다.')
+    import datetime as _dt
+    opened = st.date_input('이 가게를 개업한 날짜가 어떻게 되나요?', value=last.get('opened_at'),
+                           min_value=_dt.date(1990, 1, 1), max_value=_dt.date.today(), format='YYYY-MM-DD',
+                           key=f"opened_{last['key']}")
+    last['opened_at'] = opened
+    if opened:
+        st.caption(f'연식을 비워 둔 물품은 개업일 기준 {opening_years(last):g}년으로 계산합니다.')
     rows = inventory_rows(last)
     if not rows:
-        st.info('목록이 비어 있습니다. 사진에서 영역을 지정해 물건을 추가할 수 있습니다.')
+        st.info('목록이 비어 있습니다. 이전 화면에서 사진에 영역을 그려 물품을 추가할 수 있습니다.')
         return
-    # 모바일(폭 375px)에서 연식 칸이 잘리지 않도록 입력이 필요한 칸을 앞으로, 폭을 고정 (2026-11-15)
     table = pd.DataFrame([{k: row.get(k, '') for k in ('집기명', '개수', '연식(년)', '제조사', '모델명')} for row in rows])
     widget_key = f"inventory_{last['key']}_{last.get('table_revision', 0)}"
     st.data_editor(table, hide_index=True, use_container_width=True, num_rows='fixed',
-                   disabled=['개수'], key=widget_key, on_change=apply_inventory_edit,
-                   args=(last, rows, widget_key),
-                   column_config={'집기명': st.column_config.TextColumn(required=True, width=66),
-                                  '개수': st.column_config.NumberColumn(format='%d개', width=46),
+                   key=widget_key, on_change=apply_inventory_edit, args=(last, rows, widget_key),
+                   column_config={'집기명': st.column_config.TextColumn('물품명', required=True, width=66),
+                                  '개수': st.column_config.NumberColumn(min_value=1, step=1, format='%d개', width=50),
                                   '연식(년)': st.column_config.TextColumn('연식', width=58,
-                                                                        help='몇 년 사용했는지 숫자 (1년 미만은 0.5)'),
+                                                                        help='몇 년 사용했는지 숫자 (1년 미만은 0.5). 비우면 개업일 기준'),
                                   '제조사': st.column_config.TextColumn(width=80),
                                   '모델명': st.column_config.TextColumn()})
+    st.caption('표 안의 내용을 눌러 직접 수정할 수 있습니다.')
+
+
+def opening_years(last):
+    opened = last.get('opened_at')
+    if not opened:
+        return None
+    import datetime as _dt
+    return max(0.5, round((_dt.date.today() - opened).days / 365, 1))
+
+
+def priced_rows(last):
+    """견적·판매 준비에 쓰는 물품 행. 연식이 비면 개업일 기준 연식을 채운다."""
+    rows, fixed, supplies = disposal_rows(last)
+    years = opening_years(last)
+    for r in rows:
+        if not str(r.get('연식(년)', '')).strip() and years is not None:
+            r['연식(년)'] = f'{years:g}'
+            r['연식 근거'] = '개업일 기준'
+    return rows, fixed, supplies
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -551,166 +517,165 @@ def disposal_rows(last):
     return rows, fixed, supplies
 
 
-def plan_screen():
-    last = st.session_state.get('last')
-    if not last:
-        go_to(2)
-    presentation.section_label(3, '처분 계획')
-    st.header('처분할 물품과 방식을 골라 주세요')
-    rows, fixed, supplies = disposal_rows(last)
-    disposal_view.selection(last, rows)
-    if fixed or supplies:
-        st.caption('고정 설비·재고·소모품은 참고 견적 대상에서 제외됩니다. 최종 견적에서 별도로 확인할 수 있습니다.')
+def final_page(last):
+    presentation.section_label(3, '최종 견적 확인')
+    st.header('우리 가게가 이어갈 가치')
+    rows, fixed, supplies = priced_rows(last)
+    with st.spinner('시세표에서 가격을 찾는 중...'):
+        estimates = [safe_estimate(row, price, cached_estimate) for row in rows]
+    priced = [(r, e) for r, e in zip(rows, estimates) if e['mid'] is not None]
+    low = sum(e['low'] * r['개수'] for r, e in priced)
+    mid = sum(e['mid'] * r['개수'] for r, e in priced)
+    high = sum(e['high'] * r['개수'] for r, e in priced)
+    with st.container(key='estimate_summary', border=True):
+        if priced:
+            st.markdown(f'### 약 {mid:,}원')
+            st.markdown(f'**{low:,}원 ~ {high:,}원** (물품별 시세 범위 합계)')
+            st.caption('팀 조사 시세(전문 커뮤니티 장터·B2B 중고주방·개인 직거래 시세 종합)에 기반한 것이며, '
+                       '시세 및 판매처에 따라 차이가 있을 수 있습니다.')
+            if len(priced) < len(rows):
+                st.warning(f'가격 정보가 없는 {len(rows) - len(priced)}개 품목은 합계에서 제외했습니다.')
+        else:
+            st.markdown('### — 원')
+            st.caption('가격 정보가 있는 물품이 없습니다.')
+    with st.expander('최종 탐지 결과 확인 (분석된 사진)'):
+        st.image(draw_boxes(last['image'], last['det']['objects'], last['box_names']), use_container_width=True)
+    e = estimates
+    table = pd.DataFrame([{k: row.get(k, '') for k in ('집기명', '개수', '연식(년)', '제조사', '모델명')} for row in rows])
+    prices = table.copy()
+    prices['개당 예상 중고가 (원)'] = [x['mid'] for x in e]
+    prices['개당 범위'] = [f"{x['low'] // 10000:,}~{x['high'] // 10000:,}만" if x['low'] is not None else '' for x in e]
+    prices['합계 (원)'] = [x['mid'] * c if x['mid'] is not None else None for x, c in zip(e, prices['개수'])]
+    head_l, head_r = st.columns([3, 2], vertical_alignment='bottom')
+    head_l.subheader('물품별 가격 · 시세')
+    head_r.download_button('CSV 내려받기', prices.to_csv(index=False).encode('utf-8-sig'),
+                           file_name='이어가게_최종목록.csv', mime='text/csv', use_container_width=True)
+    st.dataframe(prices[['집기명', '개수', '개당 예상 중고가 (원)', '개당 범위', '합계 (원)']], hide_index=True, use_container_width=True,
+                 column_config={'집기명': st.column_config.TextColumn('물품명', width=90),
+                                '개수': st.column_config.NumberColumn('수량', width=48),
+                                '개당 예상 중고가 (원)': st.column_config.NumberColumn('개당(원)', width=95, format='localized'),
+                                '개당 범위': st.column_config.TextColumn('범위', width=80),
+                                '합계 (원)': st.column_config.NumberColumn('합계(원)', width=100, format='localized')})
+    if fixed:
+        st.caption('고정 설비로 분류되어 견적에서 제외: ' + ', '.join(f"{r['집기명']} {r['개수']}" for r in fixed))
+    if supplies:
+        st.caption('재고·소모품은 개별 시세 없이 제외: ' + ', '.join(f"{r['집기명']} {r['개수']}" for r in supplies))
+    with st.expander('가격 근거 보기'):
+        for r, x in zip(rows, e):
+            st.markdown(f"**{r['집기명']} · {r.get('제조사', '')} {r.get('모델명', '')}**".strip())
+            lines = list(x.get('calc') or [x['source']])
+            if r.get('연식 근거'):
+                lines.insert(0, f"연식 {r['연식(년)']}년 ({r['연식 근거']})")
+            st.markdown('\n'.join(f'- {line}' for line in lines))
+        st.caption('산정 방식: 모델별 중고 시세 범위를 기본으로, 연식 1년 이하는 범위 상단·5년은 하단·그 사이는 비례 위치, '
+                   '5년 초과는 하단에서 해마다 10%씩 추가 하락(최저 신품가의 10%). 5년 기준: 법인세법 시행규칙 [별표5] 기구 및 비품 기준내용연수. '
+                   '시세는 팀 조사 추정값이며 개별 매물 원문 링크는 없습니다.')
     with st.container(key='page_actions'):
         left, right = st.columns(2)
-        if left.button('← 분석·수정', use_container_width=True):
-            go_to(3)
-        if right.button('최종 견적 보기 →', type='primary', use_container_width=True):
-            go_to(5)
+        if left.button('← 이전 화면', use_container_width=True):
+            go_to(4)
+        if right.button('이어가기 →', type='primary', use_container_width=True):
+            go_to(6)
 
 
 def sale_screen():
     last = st.session_state.get('last')
     if not last:
         go_to(2)
-    presentation.section_label(5, '판매 준비')
-    st.header('물품의 다음 쓰임을 준비하세요')
-    rows, _, _ = disposal_rows(last)
-    states = sync_states(last, rows)
-    estimates = [safe_estimate(row, price, cached_estimate) for row in rows]
-    disposal_view.results(last, rows, estimates, states)
+    presentation.section_label(4, '판매 준비')
+    st.header('나의 물품 이어가기')
+    st.caption('물품을 확인하고, 판매처를 알고 싶은 물품의 [확인하기] 버튼을 눌러 주세요.')
+    region = st.text_input('현재 가게의 소재지를 입력해 주세요 (시·구·동)', value=last.get('vendor_region', ''),
+                           placeholder='예: 서울 성북구, 마포구 연남동', key=f"region_{last['key']}")
+    last['vendor_region'] = region.strip()
+    st.caption('판매처 추천용입니다. 입력한 지역 근처의 업체를 카카오맵에서 찾아 드립니다.')
+    rows, _, _ = priced_rows(last)
+    if not rows:
+        st.info('판매할 물품이 없습니다. 2단계에서 물품을 확인해 주세요.')
+    for i, r in enumerate(rows):
+        est = safe_estimate(r, price, cached_estimate)
+        with st.container(border=True, key=f'sale_row_{i}'):
+            info, action = st.columns([3, 1], vertical_alignment='center')
+            ident = ' '.join(x for x in (r.get('제조사', ''), r.get('모델명', '')) if x and x != '미확인')
+            price_txt = f" · 약 {est['mid']:,}원" if est.get('mid') else ''
+            info.markdown(f"**{r['집기명']}** {r['개수']}개{price_txt}  \n{ident}")
+            if action.button('확인하기', key=f'vendor_btn_{i}', use_container_width=True,
+                             disabled=not last['vendor_region']):
+                last['vendor_item'] = {'집기명': r['집기명'], '개수': r['개수'], '제조사': r.get('제조사', ''),
+                                       '모델명': r.get('모델명', '')}
+                go_to(7)
+    if rows and not last['vendor_region']:
+        st.caption('소재지를 입력하면 [확인하기] 버튼이 활성화됩니다.')
     with st.container(key='page_actions'):
         left, right = st.columns(2)
-        if left.button('← 최종 견적', use_container_width=True):
+        if left.button('← 이전 화면', use_container_width=True):
             go_to(5)
-        if right.button('처분 계획 수정', use_container_width=True):
-            go_to(4)
+        if right.button('처음 화면으로 돌아가기', use_container_width=True):
+            go_to(1)
 
 
-def final_page(last):
-    presentation.section_label(4, '최종 견적')
-    st.header('선택한 물품의 참고 중고 가치')
-    rows, fixed, supplies = disposal_rows(last)
-    disposal_states = sync_states(last, rows)
-    rows = [row for row in rows if disposal_states[row_key(row)]['selected']]
-    estimates = []
-    with st.spinner('저장된 가격 DB와 보조 공매 기록을 확인하는 중...'):
-        for row in rows:
-            estimates.append(safe_estimate(row, price, cached_estimate))
-    priced = [(r, e) for r, e in zip(rows, estimates) if e['mid'] is not None and disposal_states[row_key(r)]['selected']]
-    low = sum(e['low'] * r['개수'] for r, e in priced)
-    mid = sum(e['mid'] * r['개수'] for r, e in priced)
-    high = sum(e['high'] * r['개수'] for r, e in priced)
-    selected_count = sum(s['selected'] for s in disposal_states.values())
-    with st.container(key='estimate_summary'):
-        presentation.estimate_label()
-        if priced:
-            # 최종 가격 하나만 크게 (계산 과정은 아래 '계산 과정·근거 보기'에서 원할 때만)
-            st.markdown(f'### {mid:,}원')
-            st.markdown(f'**참고 범위 {low:,}원 ~ {high:,}원**')
-            st.caption(f'가격이 나온 {len(priced)}개 품목 그룹의 예상 중고가 × 개수 합계 · 시세 및 판매처에 따라 차이가 있을 수 있습니다.')
-            if len(priced) < selected_count:
-                st.warning(f'부분 견적입니다. 가격 근거 부족 {selected_count - len(priced)}개 품목 그룹은 합계에서 제외했습니다.')
-            if len({e['price_basis'] for _, e in priced}) > 1:
-                st.info('품목별 게시 가격과 공매 낙찰가 등 서로 다른 근거의 금액을 합산한 참고 합계입니다. 실제 매각액과 다를 수 있습니다.')
-        elif selected_count == 0:
-            st.markdown('### 0원')
-            st.caption('선택한 처분 대상이 없습니다.')
-        else:
-            st.markdown('### — 원 ~ — 원')
-            st.caption('가격 근거가 있는 품목이 없습니다. 아래 검색 링크로 직접 확인해 주세요.')
-    st.caption('합계는 선택한 물품의 참고 가치이며, 실제 현금 회수 예상액이 아닙니다. 양도·나눔 물품의 가치도 포함됩니다.')
-    with st.expander('최종 탐지 결과 확인'):
-        st.image(draw_boxes(last['image'], last['det']['objects'], last['box_names']),
-                 caption='수정 내용이 반영된 최종 분석 사진', use_container_width=True)
-    columns = ['집기명', '제조사', '개수', '모델명', '연식(년)']  # 사양 칸은 화면에서 제거 (2026-11-14, 내부 값은 모델명에서 자동 추출)
-    table = pd.DataFrame([{k: row.get(k, '') for k in columns} for row in rows], columns=columns)
-    table['처분 대상'] = [disposal_states[row_key(r)]['selected'] for r in rows]
-    edited = last.get('edited_makers', set())
-    basis = last.get('brand_basis', {})
-    table['제조사 근거'] = ['사용자 입력' if any(i in edited for i in r['box_ids']) else
-                       next((basis[i] for i in r['box_ids'] if basis.get(i)), '') for r in rows]
-    with st.expander('선택한 집기 상세 목록'):
-        st.dataframe(table, hide_index=True, use_container_width=True)
-    if fixed:
-        st.caption('고정 설비로 분류되어 견적에서 제외: '
-                   + ', '.join(f"{r['집기명']} {r['개수']}" for r in fixed)
-                   + ' (떼어 팔 수 있다면 2단계에서 이름을 바꿔 주세요)')
-    if supplies:
-        st.subheader('재고·소모품 묶음')
-        st.caption('컵·원두·병 음료·소품 등은 개별 시세 대신 묶음 1건으로 정리합니다. 참고 가치 합계에는 포함하지 않습니다.')
-        st.dataframe(pd.DataFrame([{'품목': r['집기명'], '개수': r['개수'], '분류': r['분류']} for r in supplies]),
-                     hide_index=True, use_container_width=True)
-    st.subheader('물품별 가격 · 시세')
-    e = estimates
-    prices = table[['집기명', '제조사', '개수', '모델명', '연식(년)']].copy()
-    prices['개당 예상 중고가 (원)'] = [x['mid'] for x in e]
-    prices['수량별 참고 가치 (원)'] = [x['mid'] * c if x['mid'] is not None else None for x, c in zip(e, prices['개수'])]
-    prices['개당 범위'] = [f"{x['low'] // 10000:,}~{x['high'] // 10000:,}만" if x['low'] is not None else '' for x in e]
-    st.dataframe(prices[['집기명', '개수', '개당 예상 중고가 (원)', '개당 범위', '수량별 참고 가치 (원)']], hide_index=True, use_container_width=True,
-                 column_config={'집기명': st.column_config.TextColumn(width=90),
-                                '개당 범위': st.column_config.TextColumn('범위', width=80),
-                                '개수': st.column_config.NumberColumn('수량', width=48),
-                                '개당 예상 중고가 (원)': st.column_config.NumberColumn('개당(원)', width=95, format='localized'),
-                                '수량별 참고 가치 (원)': st.column_config.NumberColumn('합계(원)', width=100, format='localized')})
-    st.caption('시세 및 판매처에 따라 차이가 있을 수 있습니다.')
-    with st.expander('계산 과정·근거 보기'):
-        for r, x in zip(rows, e):
-            st.markdown(f"**{r['집기명']} · {r.get('제조사', '')} {r.get('모델명', '')}**".strip())
-            lines = x.get('calc') or [x['source']]
-            st.markdown('\n'.join(f'- {line}' for line in lines))
-            if not str(r.get('연식(년)', '')).strip():
-                st.caption('연식을 입력하면 시세 범위 안에서 위치를 정합니다 (2단계 표의 연식 칸).')
-        st.caption('산정 방식: 모델별 중고 시세 범위(팀 조사: 전문 커뮤니티 장터의 브랜드별 가격 방어율, B2B 중고주방 시세, '
-                   '개인 직거래 시세 종합)를 기본으로, 연식 1년 이하는 범위 상단·5년은 하단·그 사이는 비례 위치, '
-                   '5년 초과는 하단에서 해마다 10%씩 추가 하락(최저 신품가의 10%). 5년 기준: 법인세법 시행규칙 [별표5] 기구 및 비품 기준내용연수. '
-                   '시세는 팀 조사 추정값이며 개별 매물 원문 링크는 없습니다.')
-    with st.expander('참고 가격 안내'):
-        st.caption('현재 가격은 팀 조사 시세표(품목·제조사·대표 모델별 중고 시세 범위)에서만 냅니다. 모델 → 제조사 → 품목 평균 순서로 찾으며, 개별 매물 원문 링크가 없는 조사값이라 실제 매각액과 다를 수 있습니다. 개당 Q1(25%)·중앙값·Q3(75%) × 수량으로 계산합니다. 유효 표본 3건 미만은 가격 근거 부족으로 표시합니다. '
-                   'DB는 최근 180일의 실제 개별 매물만 사용하며 샘플·묶음은 제외합니다. '
-                   '제조사·모델이 없으면 신뢰도가 낮은 참고 시세입니다. 판매 완료 게시 가격도 실제 거래액을 보장하지 않습니다. '
-                   '보조 온비드 기록은 최근 2년의 공매 낙찰가로 일반 중고 시세보다 낮을 수 있습니다.')
-    with st.expander('가격 근거 보기 (출처·원본 매물·수집일)'):
-        ev = [{'집기명': r['집기명'], '입력 제조사': r['제조사'], **record}
-              for r, x in zip(rows, e) for record in x['evidence']]
-        ev_frame = pd.DataFrame(ev)
-        for col in ('price', '낙찰가'):  # 근거 표의 가격도 3자리 쉼표로 (숫자형으로 맞춘 뒤 표시 형식만 지정)
-            if col in ev_frame:
-                ev_frame[col] = pd.to_numeric(ev_frame[col], errors='coerce')
-        st.dataframe(ev_frame, hide_index=True, use_container_width=True,
-                     column_config={'url': st.column_config.LinkColumn('원본 매물/검색', display_text='보기'),
-                                    'price': st.column_config.NumberColumn('가격 (원)', format='localized'),
-                                    '낙찰가': st.column_config.NumberColumn('낙찰가 (원)', format='localized')})
-    export = prices.copy()
-    export['처분 대상'] = [disposal_states[row_key(r)]['selected'] for r in rows]
-    export['처분 방식'] = [disposal_states[row_key(r)]['method'] for r in rows]
-    if supplies:
-        bundle = {'집기명': '재고·소모품 묶음 (' + ', '.join(f"{r['집기명']} {r['개수']}" for r in supplies) + ')',
-                  '개수': 1, '근거': '총액 제외'}
-        export = pd.concat([export, pd.DataFrame([bundle])], ignore_index=True)
-    st.download_button('최종 목록 CSV 내려받기', export.to_csv(index=False).encode('utf-8-sig'),
-                       file_name='이어가게_최종목록.csv', mime='text/csv')
+def vendor_screen():
+    last = st.session_state.get('last')
+    if not last or not last.get('vendor_item'):
+        go_to(6)
+    import vendors
+    item, region = last['vendor_item'], last.get('vendor_region', '')
+    presentation.section_label(4, '판매 준비')
+    res = cached_vendor_search(item['집기명'], region)
+    st.caption(f"{res['area']} 기준")
+    st.header(f"[{item['집기명']}] 판매처를 추천해 드려요")
+    if res['places']:
+        st.caption(f"카카오맵에서 '{'·'.join(res['queries'])}'(으)로 찾은 근처 업체입니다. 제휴·보증 업체가 아닙니다.")
+        for n, p in enumerate(res['places'], 1):
+            with st.container(border=True):
+                phone = f" ({p['phone']})" if p['phone'] else ''
+                st.markdown(f"**{n}. {p['name']}**{phone}  \n주소: {p['address']} · {p['distance_km']}km  \n"
+                            f"[카카오맵에서 보기 ↗]({p['url']})")
+    if res['reason']:
+        st.info(res['reason'])
+    st.markdown('지도에서 직접 찾기: ' + ' · '.join(
+        f"[카카오맵 '{q}']({vendors.map_link(region, q)}) / [네이버 지도 '{q}']({vendors.naver_link(region, q)})"
+        for q in res['queries']))
     with st.container(key='page_actions'):
         left, right = st.columns(2)
-        if left.button('← 처분 계획', use_container_width=True):
-            go_to(4)
-        if right.button('판매 준비 →', type='primary', use_container_width=True):
+        if left.button('← 이전 화면', use_container_width=True):
             go_to(6)
+        if right.button('처음 화면으로 돌아가기', use_container_width=True):
+            go_to(1)
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def cached_vendor_search(item, region):
+    import vendors
+    return vendors.search(item, region)
 
 
 def edit_screen():
     last = st.session_state.get('last')
     if not last:
         go_to(2)
-    presentation.section_label(2, '분석 결과 확인 · 직접 수정')
+    presentation.section_label(2, '물품 탐색 및 수정')
     edit_page(last)
+    with st.container(key='page_actions'):
+        left, right = st.columns(2)
+        if left.button('← 이전 화면', use_container_width=True):
+            go_to(2)
+        if right.button('수정 완료 →', type='primary', use_container_width=True):
+            go_to(4)
+
+
+def items_screen():
+    last = st.session_state.get('last')
+    if not last:
+        go_to(2)
+    presentation.section_label(2, '물품 탐색 및 수정')
     edit_inventory_table(last)
     with st.container(key='page_actions'):
         left, right = st.columns(2)
-        if left.button('← 사진 입력으로', use_container_width=True):
-            go_to(2)
-        if right.button('수정 완료 · 처분 계획 →', type='primary', use_container_width=True):
-            go_to(4)
+        if left.button('← 이전 화면', use_container_width=True):
+            go_to(3)
+        if right.button('최종 견적 확인 →', type='primary', use_container_width=True):
+            go_to(5)
 
 
 def final_screen():
@@ -722,16 +687,18 @@ def final_screen():
 
 # ---------------- 화면 ----------------
 PAGES = [st.Page(start_page, title='시작', default=True),
-         st.Page(photo_page, title='사진 입력', url_path='photo'),
-         st.Page(edit_screen, title='분석·수정', url_path='edit'),
-         st.Page(plan_screen, title='처분 계획', url_path='plan'),
-         st.Page(final_screen, title='최종 견적', url_path='estimate'),
-         st.Page(sale_screen, title='판매 준비', url_path='sale')]
+         st.Page(photo_page, title='사진 업로드', url_path='photo'),
+         st.Page(edit_screen, title='물품 탐색 및 수정', url_path='edit'),
+         st.Page(items_screen, title='물품 목록 확인', url_path='items'),
+         st.Page(final_screen, title='최종 견적 확인', url_path='estimate'),
+         st.Page(sale_screen, title='판매 준비', url_path='sale'),
+         st.Page(vendor_screen, title='판매처 추천', url_path='vendor')]
 navigation = st.navigation(PAGES, position='hidden')
 presentation.masthead()
 st.session_state.setdefault('runs', 0)
-steps = ['사진 입력', '분석·수정', '처분 계획', '최종 견적', '판매 준비']
-step = steps.index(navigation.title) + 1 if navigation.title in steps else 0
+steps = ['사진 업로드', '물품 탐색 및 수정', '최종 견적 확인', '판매 준비']
+STEP_OF = {'사진 업로드': 1, '물품 탐색 및 수정': 2, '물품 목록 확인': 2, '최종 견적 확인': 3, '판매 준비': 4, '판매처 추천': 4}
+step = STEP_OF.get(navigation.title, 0)
 presentation.stage_navigation(step, steps)
 with st.container(key=f'page_{step}'):
     navigation.run()

@@ -133,3 +133,10 @@ iframe[title="box_selector.box_selector"] { border-radius: 18px; border: 1px sol
 .st-key-rotate_buttons [data-testid="stColumn"] { min-width: 0 !important; width: auto !important; flex: 1 1 0 !important; }
 .st-key-rotate_buttons button { padding-left: clamp(4px, 1.5vw, 16px) !important; padding-right: clamp(4px, 1.5vw, 16px) !important; }
 .st-key-rotate_buttons button p { font-size: clamp(11px, 3.3vw, 16px) !important; white-space: nowrap !important; overflow: hidden; text-overflow: ellipsis; }
+
+/* 시작 화면 단계 목록 (화면 구상안) */
+.fs-step-list { list-style: none; margin: 14px 0 6px; padding: 0 0 0 14px; border-left: 2px solid #d8d4c8; display: grid; gap: 12px; }
+.fs-step-list li { display: flex; gap: 10px; align-items: baseline; font-size: 15px; }
+.fs-step-list b { min-width: 52px; color: #c96f4a; font-size: 13px; }
+.st-key-edit_box_actions [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 8px !important; }
+.st-key-edit_box_actions [data-testid="stColumn"] { min-width: 0 !important; flex: 1 1 0 !important; width: auto !important; }
