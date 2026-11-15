@@ -36,6 +36,19 @@ class VendorTest(unittest.TestCase):
         with patch.object(vendors, '_call', side_effect=fake_call):
             self.assertEqual(vendors.search('x', '성북구', key='k', disposal=True)['queries'], ['폐업 철거'])
 
+    def test_region_and_address_pass_through(self):
+        for region in ('서울 마포구', '경기 양평군', '전남 순천시', '서울 마포구 월드컵로 240'):
+            with self.subTest(region=region):
+                with patch.object(vendors, '_call', side_effect=fake_call) as call:
+                    result = vendors.search('의자', region, key='test')
+                self.assertTrue(result['ok'])
+                self.assertEqual(call.call_args_list[0].kwargs['query'], region)
+                with patch.object(vendors, '_call', return_value={'documents': []}) as call:
+                    result = vendors.search('의자', region, key='test')
+                self.assertEqual(len(call.call_args_list), 2)
+                self.assertEqual(call.call_args_list[1].kwargs['query'], region)
+                self.assertIn('지역명 또는 주소', result['reason'])
+
     def test_quote_request_facts(self):
         text = vendors.quote_request([{'집기명': '제빙기', '제조사': '카이저', '모델명': 'IMK-3051', '개수': 1, '연식(년)': '3'}],
                                      [{'mid': 400000}])

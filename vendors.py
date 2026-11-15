@@ -97,7 +97,7 @@ def search(item, region, limit=3, key=None, disposal=False):
     try:
         loc = locate(region, key)
         if not loc:
-            out['reason'] = f"'{region}' 위치를 찾지 못했습니다. 구·동 이름으로 다시 입력해 주세요."
+            out['reason'] = f"'{region}' 위치를 찾지 못했습니다. 지역명 또는 주소를 더 자세히 입력해 주세요."
             return out
         x, y, out['area'] = loc
         seen = {}
@@ -124,7 +124,7 @@ def search(item, region, limit=3, key=None, disposal=False):
 
 def quote_request(rows, estimates):
     """여러 업체에 똑같이 보낼 견적 요청서 (사실만, 코드가 조립)."""
-    lines = ['[매입 견적 요청]', '카페 폐업으로 아래 집기의 일괄 매입 견적을 요청드립니다.', '']
+    lines = ['[매입 견적 요청]', '카페 폐업으로 아래 물품의 일괄 매입 견적을 요청드립니다.', '']
     for r, e in zip(rows, estimates):
         ident = ' '.join(str(r.get(k, '')).strip() for k in ('제조사', '모델명') if r.get(k) and r[k] != '미확인')
         years = str(r.get('연식(년)', '')).strip()

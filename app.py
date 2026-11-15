@@ -148,7 +148,7 @@ def draw_boxes(
         cx, cy = (px1 + px2) / 2, (py1 + py2) / 2
         d.rectangle([px1, py1, px2, py2], outline=(0, 230, 118), width=line + 2)
         d.ellipse([cx - 6, cy - 6, cx + 6, cy + 6], fill=(255, 0, 80), outline="white", width=2)
-        p_label = "➕ 새 집기 추가 위치"
+        p_label = "➕ 새 물품 추가 위치"
         l, t, r, b = d.textbbox((0, 0), p_label, font=label_font)
         tw, th = r - l + 8, b - t + 6
         lx = min(max(0, px1), W - tw)
@@ -271,7 +271,7 @@ def edit_page(last):
 
 
     rows = inventory_rows(last)
-    st.caption(f"현재 집기 {len(rows)}종 · 총 {len(box_names)}개 박스")
+    st.caption(f"현재 물품 {len(rows)}종 · 총 {len(box_names)}개 박스")
     if last['det'].get('truncated'):
         st.caption('물체가 많아 일부 누락될 수 있습니다. 놓친 물건은 직접 추가해 주세요.')
 
@@ -359,14 +359,9 @@ def apply_inventory_edit(last, rows, widget_key):
 
 def start_page():
     with st.container(key='hero_layout'):
-        artwork, story = st.columns([1.05, 1], gap='large', vertical_alignment='center')
-        with artwork:
-            presentation.hero_visual()
-        with story:
-            st.header('이어가게')
-            st.markdown('**남은 집기, 다음 가게로 이어주세요**')
-            st.caption('폐업하는 카페의 집기를 사진 한 장으로 정리하고, 예상 가격과 근처 판매처까지 알려 드립니다.')
-            presentation.step_list(['사진 업로드', '물품 탐색 및 수정', '최종 견적 확인', '판매 준비'])
+        st.header('남은 물품의 가치를 찾고, 새로운 시작을 준비하세요.')
+        st.markdown('매장 사진 한 장으로 물품을 파악하고, 예상 중고 시세와 판매 경로까지 확인하세요.')
+        presentation.step_list(['사진 업로드', '물품 탐색 및 수정', '최종 견적 확인', '판매 준비'])
     with st.container(key='start_actions'):
         if st.button('⇨ 이어가기', type='primary', use_container_width=True):
             go_to(2)
@@ -377,7 +372,7 @@ def start_page():
 def photo_page():
     presentation.section_label(1, '사진 업로드')
     st.header('사진을 준비해 주세요')
-    st.caption('집기가 잘 보이도록 매장을 넓게 찍어 주세요. JPG·PNG·HEIC(iPhone), 최대 10MB')
+    st.caption('물품이 잘 보이도록 매장을 넓게 찍어 주세요. JPG·PNG·HEIC(iPhone), 최대 10MB')
     methods = ['사진 올리기', '카메라로 찍기']
     source = st.radio('사진 입력', methods, index=methods.index(st.session_state.get('input_method', methods[0])), horizontal=True)
     st.session_state.input_method = source
@@ -453,7 +448,7 @@ def photo_page():
 def edit_inventory_table(last):
     st.header('분석된 물품을 확인하고, 수정해 주세요')
     st.caption('아래 표는 AI가 정리한 물품 목록입니다. 올바르게 입력되었는지 확인하고, 물품의 연식을 입력해 주세요. '
-               '제조사·모델명은 AI가 시세표 후보 중에서 예측한 값입니다.')
+               '제조사와 모델명은 AI가 추정한 정보입니다.')
     import datetime as _dt
     opened = st.date_input('이 가게를 개업한 날짜가 어떻게 되나요?', value=last.get('opened_at'),
                            min_value=_dt.date(1990, 1, 1), max_value=_dt.date.today(), format='YYYY-MM-DD',
@@ -544,17 +539,17 @@ def final_page(last):
     table = pd.DataFrame([{k: row.get(k, '') for k in ('집기명', '개수', '연식(년)', '제조사', '모델명')} for row in rows])
     prices = table.copy()
     prices['개당 예상 중고가 (원)'] = [x['mid'] for x in e]
-    prices['개당 범위'] = [f"{x['low'] // 10000:,}~{x['high'] // 10000:,}만" if x['low'] is not None else '' for x in e]
+    prices['개당 범위'] = [f"{x['low']:,}~{x['high']:,}" if x['low'] is not None else '' for x in e]
     prices['합계 (원)'] = [x['mid'] * c if x['mid'] is not None else None for x, c in zip(e, prices['개수'])]
     head_l, head_r = st.columns([3, 2], vertical_alignment='bottom')
     head_l.subheader('물품별 가격 · 시세')
-    head_r.download_button('CSV 내려받기', prices.to_csv(index=False).encode('utf-8-sig'),
+    head_r.download_button('CSV 내려받기', prices.rename(columns={'집기명': '물품명', '개당 범위': '범위(원)'}).to_csv(index=False).encode('utf-8-sig'),
                            file_name='이어가게_최종목록.csv', mime='text/csv', use_container_width=True)
     st.dataframe(prices[['집기명', '개수', '개당 예상 중고가 (원)', '개당 범위', '합계 (원)']], hide_index=True, use_container_width=True,
                  column_config={'집기명': st.column_config.TextColumn('물품명', width=90),
                                 '개수': st.column_config.NumberColumn('수량', width=48),
                                 '개당 예상 중고가 (원)': st.column_config.NumberColumn('개당(원)', width=95, format='localized'),
-                                '개당 범위': st.column_config.TextColumn('범위', width=80),
+                                '개당 범위': st.column_config.TextColumn('범위(원)', width=180),
                                 '합계 (원)': st.column_config.NumberColumn('합계(원)', width=100, format='localized')})
     if fixed:
         st.caption('고정 설비로 분류되어 견적에서 제외: ' + ', '.join(f"{r['집기명']} {r['개수']}" for r in fixed))
@@ -585,10 +580,10 @@ def sale_screen():
     presentation.section_label(4, '판매 준비')
     st.header('나의 물품 이어가기')
     st.caption('물품을 확인하고, 판매처를 알고 싶은 물품의 [확인하기] 버튼을 눌러 주세요.')
-    region = st.text_input('현재 가게의 소재지를 입력해 주세요 (시·구·동)', value=last.get('vendor_region', ''),
-                           placeholder='예: 서울 성북구, 마포구 연남동', key=f"region_{last['key']}")
+    region = st.text_input('현재 가게의 소재지를 입력해 주세요 (지역명 또는 주소)', value=last.get('vendor_region', ''),
+                           placeholder='예: 서울 마포구', key=f"region_{last['key']}")
     last['vendor_region'] = region.strip()
-    st.caption('판매처 추천용입니다. 입력한 지역 근처의 업체를 카카오맵에서 찾아 드립니다.')
+    st.caption('서울 마포구, 경기 양평군, 전남 순천시 등 지역명 또는 주소를 입력하세요. 입력한 지역 근처의 업체를 카카오맵에서 찾아 드립니다.')
     rows, _, _ = priced_rows(last)
     if not rows:
         st.info('판매할 물품이 없습니다. 2단계에서 물품을 확인해 주세요.')

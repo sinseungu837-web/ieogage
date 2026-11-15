@@ -95,6 +95,9 @@ ns['final_page'](last)
         self.assertEqual(len(page.exception), 0)
         prices = page.dataframe[0].value
         self.assertEqual(prices.iloc[0]['개당 예상 중고가 (원)'], 150000)
+        self.assertEqual(prices.iloc[0]['개당 범위'], '100,000~200,000')
+        self.assertEqual(prices.iloc[1]['개당 범위'], '')
+        self.assertEqual(prices.iloc[0]['합계 (원)'], 150000)
         self.assertTrue(math.isnan(prices.iloc[1]['개당 예상 중고가 (원)']))
         self.assertTrue(any('합계에서 제외' in value.value for value in page.warning))
         self.assertTrue(any('### 약 150,000원' in value.value for value in page.markdown))  # 대표가 + 범위

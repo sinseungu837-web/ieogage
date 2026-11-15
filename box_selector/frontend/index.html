@@ -10,7 +10,7 @@ img { display:block; width:100%; pointer-events:none; }
 #box { position:absolute; box-sizing:border-box; border:3px solid #00b85c; background:#00e67622; pointer-events:none; display:none; }
 #status { font-size:12px; line-height:1.65; color:#656861; margin:9px 0; }
 </style></head>
-<body><div id="surface" role="img" aria-label="집기 사진. 영역 선택 모드에서는 마우스나 손가락으로 드래그하세요."><img id="photo" alt="인식된 집기 사진" draggable="false"><div id="box"></div></div><p id="status" aria-live="polite"></p>
+<body><div id="surface" role="img" aria-label="물품 사진. 영역 선택 모드에서는 마우스나 손가락으로 드래그하세요."><img id="photo" alt="인식된 물품 사진" draggable="false"><div id="box"></div></div><p id="status" aria-live="polite"></p>
 <script>
 const surface = document.getElementById('surface'), photo = document.getElementById('photo'), box = document.getElementById('box'), status = document.getElementById('status');
 let args = {}, start = null, pointer = null, selection = null, token, eventId = 0;

@@ -37,7 +37,7 @@ def selection(last, rows):
                     state['selected'] = selected
                 last['disposal_revision'] = last.get('disposal_revision', 0) + 1
     if not rows:
-        st.info('처분할 집기가 없습니다. 분석·수정 단계에서 물품을 추가해 주세요.')
+        st.info('처분할 물품이 없습니다. 분석·수정 단계에서 물품을 추가해 주세요.')
         return states
     keys = [row_key(row) for row in rows]
     table = pd.DataFrame([{'대상': states[key]['selected'], '물품명': row['집기명'],
@@ -126,10 +126,10 @@ def results(last, rows, estimates, states):
                 st.info('무료 나눔의 현금 회수액은 0원입니다. 아래 금액은 물품의 참고 가치입니다.')
             table = pd.DataFrame([{**{k: r.get(k, '') for k in ('집기명', '제조사', '모델명', '개수', '연식(년)')},
                 '개당 참고 시세 (원)': lookup[row_key(r)]['mid']} for r in items])
-            st.dataframe(table[['집기명', '개수', '개당 참고 시세 (원)']], hide_index=True, use_container_width=True)
+            st.dataframe(table[['집기명', '개수', '개당 참고 시세 (원)']].rename(columns={'집기명': '물품명'}), hide_index=True, use_container_width=True)
             with st.expander('제조사·모델·연식 상세 목록'):
-                st.dataframe(table, hide_index=True, use_container_width=True)
-            st.download_button('물품 목록 CSV 내려받기', table.to_csv(index=False).encode('utf-8-sig'),
+                st.dataframe(table.rename(columns={'집기명': '물품명'}), hide_index=True, use_container_width=True)
+            st.download_button('물품 목록 CSV 내려받기', table.rename(columns={'집기명': '물품명'}).to_csv(index=False).encode('utf-8-sig'),
                 file_name=f'이어가게_{method}.csv', key='export:' + method)
             if method == '전문업체 매각':
                 vendor_section(last, items, [lookup[row_key(r)] for r in items])
@@ -154,8 +154,8 @@ def vendor_section(last, items, estimates):
     """전문업체 찾기: 지역 → 물품별 근처 업체(카카오맵) + 견적 요청서. 알선·보증 아님."""
     import vendors
     st.markdown('#### 근처 전문업체 찾기')
-    region = st.text_input('매장 지역 (구·동)', value=last.get('vendor_region', ''),
-                           placeholder='예: 성북구, 마포구 연남동', key=f"vendor_region:{last.get('key', 'current')}")
+    region = st.text_input('매장 지역 (지역명 또는 주소)', value=last.get('vendor_region', ''),
+                           placeholder='예: 서울 마포구, 경기 양평군, 전남 순천시', key=f"vendor_region:{last.get('key', 'current')}")
     last['vendor_region'] = region.strip()
     st.caption('추천 업체는 카카오맵 장소 검색으로 찾은 결과이며 제휴·보증 업체가 아닙니다. 업체 선택과 거래 조건 확인은 직접 해 주세요.')
     if last['vendor_region']:
