@@ -17,11 +17,12 @@ class ReferenceEstimateTest(unittest.TestCase):
         model = reference.estimate('커피머신', 'FAEMA', 'E98 UP')
         maker = reference.estimate('에스프레소 머신', '훼마')
         item = reference.estimate('에스프레소 머신')
-        self.assertEqual((model['low'], model['high'], model['n']), (2700000, 2700000, 1))
+        self.assertEqual((model['low'], model['mid'], model['high'], model['n']), (2000000, 2400000, 2800000, 1))
         self.assertIn('동일 모델', model['match'])
         self.assertIn('동일 제조사', maker['match'])
-        self.assertEqual(item['n'], 4)
+        self.assertEqual(maker['n'], 3)
         self.assertIn('제조사 미확인', item['match'])
+        self.assertTrue(item['low'] < item['high'])
 
     def test_aliases_and_unknown_maker_text(self):
         self.assertIsNotNone(reference.estimate('테이블 냉장고', '스타리온'))
@@ -29,8 +30,8 @@ class ReferenceEstimateTest(unittest.TestCase):
         self.assertEqual(reference.match_maker('제빙기', 'Hoshizaki (추정)'), '호시자키')
 
     def test_not_in_table(self):
-        self.assertIsNone(reference.estimate('TV'))
-        got = price.service_estimate('TV')
+        self.assertIsNone(reference.estimate('화분'))
+        got = price.service_estimate('화분')
         self.assertIsNone(got['mid'])
         self.assertIn('시세표에 없는', got['source'])
 
@@ -49,7 +50,7 @@ class DetectFilterTest(unittest.TestCase):
 
     def test_only_table_items_and_brand_normalized(self):
         det, result = self.run_detect([
-            {'name': '에스프레소 머신', 'box_2d': [100, 100, 400, 400], 'brand': 'FAEMA', 'model': 'E98 UP 2그룹', 'brand_basis': '로고'},
+            {'name': '에스프레소 머신', 'box_2d': [100, 100, 400, 400], 'brand': 'FAEMA', 'model': 'E98 UP 2GR', 'brand_basis': '로고'},
             {'name': '의자', 'box_2d': [500, 100, 800, 200], 'brand': '톤', 'model': '체어 14 (No.14)', 'brand_basis': '형태 예측'},
             {'name': '의자', 'box_2d': [500, 300, 800, 400], 'brand': 'Tolix', 'model': 'A Chair'},
             {'name': '화분', 'box_2d': [100, 600, 300, 700], 'brand': '', 'model': ''},
@@ -61,7 +62,7 @@ class DetectFilterTest(unittest.TestCase):
         self.assertEqual(pot['brand'], '')
         machine, chair1, chair2, ice = [o for o in det['objects'] if o['label'] != '화분']
         self.assertEqual((machine['brand'], machine['model'], machine['brand_basis'], machine['spec']),
-                         ('훼마', 'E98 UP 2그룹', '로고', '2그룹'))
+                         ('훼마', 'E98 UP 2GR', '로고', '2그룹'))
         self.assertEqual((chair1['brand'], chair2['brand']), ('톤', '톨릭스'))  # 다르게 생긴 의자 → 다른 제조사
         self.assertEqual((ice['brand'], ice['brand_basis']), ('', ''))  # 후보 밖 이름은 버림 → 사용자가 입력
 
@@ -98,10 +99,10 @@ class DesignGroupTest(unittest.TestCase):
 
     def test_different_design_gets_different_maker(self):
         objs = self.run_detect([self.chair(0, 'A', '톤', ['톤', '톨릭스']), self.chair(100, 'A', '톤', ['톤']),
-                                self.chair(200, 'A', '톤', ['톤']), self.chair(300, 'B', '톤', ['톤', '이케아'])])
+                                self.chair(200, 'A', '톤', ['톤']), self.chair(300, 'B', '톤', ['톤', '톨릭스'])])
         brands = [o['brand'] for o in objs]
         self.assertEqual(brands[:3], ['톤'] * 3)  # 많은 그룹이 첫 후보 유지
-        self.assertEqual(brands[3], '이케아')     # 다르게 생긴 그룹은 다음 후보
+        self.assertEqual(brands[3], '톨릭스')     # 다르게 생긴 그룹은 다음 후보
 
     def test_same_design_unified(self):
         objs = self.run_detect([self.chair(0, 'A', '톤', ['톤']), self.chair(100, 'A', '톤', ['톤']),
@@ -131,29 +132,32 @@ class CountModeTest(unittest.TestCase):
 
 
 class AgePriceTest(unittest.TestCase):
-    def test_example_from_team_doc(self):
-        value, steps = reference.age_price(3_500_000, 4)  # 350만 원 머신 4년 사용
-        self.assertEqual(value, 1_715_000)                # 350 → 245(개봉 -30%) → -73.5(3년×10%)
-        self.assertEqual(len(steps), 3)
+    """시세 범위 + 연식 위치 (2026-11-15 팀 확정 데이터 기준)."""
+    def test_position_in_range(self):
+        self.assertEqual(reference.position_by_age(2000000, 2800000, 1)[:3], (2800000, 2000000, 2800000))
+        self.assertEqual(reference.position_by_age(2000000, 2800000, 3)[0], 2400000)
+        self.assertEqual(reference.position_by_age(2000000, 2800000, 5)[0], 2000000)
 
-    def test_floor_and_new(self):
-        self.assertEqual(reference.age_price(1_000_000, 0.5)[0], 700_000)
-        self.assertEqual(reference.age_price(1_000_000, 30)[0], 100_000)  # 최저 10%
+    def test_over_five_years_and_floor(self):
+        mid, low, high, _ = reference.position_by_age(2000000, 2800000, 8, new_price=4850000)
+        self.assertEqual(mid, 1400000)            # 하단 200만 × (1 - 0.1×3)
+        self.assertTrue(low <= mid <= high)
+        self.assertEqual(reference.position_by_age(2000000, 2800000, 30, new_price=4850000)[0], 485000)  # 신품가 10%
 
     def test_parse_years(self):
         self.assertEqual(reference.parse_years('3년'), 3.0)
         self.assertEqual(reference.parse_years('1년 미만'), 0.5)
         self.assertIsNone(reference.parse_years(''))
 
-    def test_estimate_with_years_single_price_and_calc(self):
-        e = reference.estimate('커피머신', '누오바 시모넬리', '', '', 4)
-        self.assertEqual(e['low'], e['high'])
-        self.assertTrue(any('개봉 감가' in s for s in e['calc']))
+    def test_estimate_with_years_has_range_and_calc(self):
+        e = reference.estimate('커피머신', '훼마', 'E98 UP', '', 3)
+        self.assertEqual((e['low'], e['mid'], e['high']), (2000000, 2400000, 2800000))
+        self.assertTrue(any('비례 위치' in s for s in e['calc']))
+        self.assertTrue(any('근거' in s for s in e['calc']))
 
-    def test_no_new_price_falls_back_with_note(self):
-        e = reference.estimate('의자', '톨릭스', '', '', 3)
-        self.assertEqual(e['mid'], 50000)
-        self.assertIn('신품가 미조사', e['calc'][0])
+    def test_new_items_priced(self):
+        for name in ('포스기', '키오스크', 'TV', '식기세척기', '에어컨', '싱크대'):
+            self.assertIsNotNone(reference.estimate(name), name)
 
 
 class ExcludeStructureTest(unittest.TestCase):

@@ -378,7 +378,7 @@ def detect_all(image, model: str | None = None, count_mode: str = "dedupe") -> t
         oid = len(objs)
         objs.append({"id": oid, "label": name, "box": [round(v, 1) for v in box], "task": "GEMINI",
                      "brand": brand, "model": model, "brand_basis": basis,
-                     "spec": ",".join(m.replace(" ", "") for m in re.findall(r"\d+\s*그룹|\d+\s*kg|\d+\s*평형", model, re.I)),
+                     "spec": _spec_from_model(model),
                      "_group": str(it.get("design_group") or "").strip(),
                      "_rank": [str(x) for x in (it.get("brand_rank") or []) if x]})
         g = groups.setdefault(name, {"ids": [], "cat": it.get("category", "집기"), "unc": False, "fixed": False})
@@ -423,6 +423,13 @@ def assign_design_brands(objs):
             _apply(item, members, choice)
 
 
+def _spec_from_model(model):
+    """모델명에서 사양 추출: '2그룹'·'2GR' → 2그룹, '50kg', '40평형'."""
+    out = [f"{m}그룹" for m in re.findall(r"(\d+)\s*(?:그룹|GR)", model, re.I)]
+    out += [m.replace(" ", "") for m in re.findall(r"\d+\s*kg|\d+\s*평형", model, re.I)]
+    return ",".join(out)
+
+
 def _majority(members):
     brands = [o["brand"] for o in members if o["brand"]]
     return max(set(brands), key=brands.count) if brands else ""
@@ -437,7 +444,7 @@ def _apply(item, members, brand):
         if o["brand"] != brand:
             o["brand_basis"] = "형태 예측"
         o["brand"], o["model"] = brand, model
-        o["spec"] = ",".join(m.replace(" ", "") for m in re.findall(r"\d+\s*그룹|\d+\s*kg|\d+\s*평형", model, re.I))
+        o["spec"] = _spec_from_model(model)
 
 
 def generate_sale_post(row, state, model=None):
