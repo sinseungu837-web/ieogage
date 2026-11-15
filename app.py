@@ -370,9 +370,8 @@ def start_page():
 
 
 def photo_page():
-    presentation.section_label(1, '사진 업로드')
     st.header('사진을 준비해 주세요')
-    st.caption('물품이 잘 보이도록 매장을 넓게 찍어 주세요. JPG·PNG·HEIC(iPhone), 최대 10MB')
+    st.caption('물품이 잘 보이도록 매장을 넓게 찍어 주세요.')
     methods = ['사진 올리기', '카메라로 찍기']
     source = st.radio('사진 입력', methods, index=methods.index(st.session_state.get('input_method', methods[0])), horizontal=True)
     st.session_state.input_method = source
