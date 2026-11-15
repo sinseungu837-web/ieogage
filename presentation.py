@@ -55,3 +55,22 @@ def footer():
 
 def estimate_label():
     st.html('<p class="fs-total-label">선택한 물품의 참고 중고 가치 합계</p>')
+
+
+
+def native_photo_inputs():
+    """업로드 input 의 속성을 브라우저에서 고친다 (Streamlit 위젯은 accept/capture 를 직접 지정할 수 없음).
+    - 사진 올리기: accept=image/* → iOS 사진 선택 창 정상 동작
+    - 카메라로 찍기: accept=image/* + capture=environment → 휴대폰 기본 카메라 앱(후면)으로 바로 촬영"""
+    import streamlit.components.v1 as components
+    components.html("""<script>
+    const doc = window.parent.document;
+    function fix() {
+      doc.querySelectorAll('.st-key-photo_upload input[type=file]').forEach(el => {
+        el.setAttribute('accept', 'image/*'); el.removeAttribute('capture'); });
+      doc.querySelectorAll('.st-key-camera_upload input[type=file]').forEach(el => {
+        el.setAttribute('accept', 'image/*'); el.setAttribute('capture', 'environment'); });
+    }
+    fix();
+    new MutationObserver(fix).observe(doc.body, {childList: true, subtree: true});
+    </script>""", height=0)

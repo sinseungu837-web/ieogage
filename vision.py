@@ -57,6 +57,13 @@ def load_model():
     return None, None
 
 
+try:  # iPhone HEIC 사진을 PIL 로 열 수 있게 등록 (없으면 JPG·PNG 만)
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+except ImportError:
+    pass
+
+
 def prepare(image: Image.Image) -> Image.Image:
     image = image.convert("RGB")
     if max(image.size) > MAX_SIDE:

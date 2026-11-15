@@ -422,14 +422,19 @@ def start_page():
 def photo_page():
     presentation.section_label(1, '사진 입력')
     st.header('사진을 준비해 주세요')
-    st.caption('집기가 잘 보이도록 매장을 넓게 찍어 주세요. JPG·PNG, 최대 10MB')
+    st.caption('집기가 잘 보이도록 매장을 넓게 찍어 주세요. JPG·PNG·HEIC(iPhone), 최대 10MB')
     methods = ['사진 올리기', '카메라로 찍기']
     source = st.radio('사진 입력', methods, index=methods.index(st.session_state.get('input_method', methods[0])), horizontal=True)
     st.session_state.input_method = source
-    file = st.file_uploader('매장 사진', type=['jpg', 'jpeg', 'png'], accept_multiple_files=False) if source == methods[0] else st.camera_input('매장을 넓게 찍어 주세요')
-    with st.expander('iPhone에서 사진 선택이 완료되지 않나요?'):
-        st.write('사진 보관함의 선택 창은 iOS가 표시합니다. 완료 버튼이 보이지 않으면 선택 창을 닫고 Safari에서 직접 다시 열어 주세요. 앱 내부 브라우저라면 Safari로 열어 주세요.')
-        st.write('계속되면 사진을 파일 앱에 저장한 뒤 업로드의 파일 선택으로 열거나, 카메라로 찍기를 이용해 주세요. HEIC 사진은 JPG 또는 PNG로 변환하고 10MB 이하로 준비해 주세요.')
+    # iPhone 문제 대응 (2026-11-15): ① 확장자만 지정하면 iOS 사진 선택 창에서 완료가 안 되는 경우가 있어 accept 를 image/* 로 바꾸고
+    # HEIC 도 받는다 ② 카메라는 페이지 안 작은 웹캠(st.camera_input) 대신 휴대폰 기본 카메라 앱을 연다 (capture=environment)
+    photo_types = ['jpg', 'jpeg', 'png', 'heic', 'heif', 'webp']
+    if source == methods[0]:
+        file = st.file_uploader('매장 사진', type=photo_types, accept_multiple_files=False, key='photo_upload')
+    else:
+        file = st.file_uploader('카메라로 찍기 (휴대폰은 기본 카메라 앱이 열립니다)', type=photo_types,
+                                accept_multiple_files=False, key='camera_upload')
+    presentation.native_photo_inputs()
     if file is not None:
         if file.size > MAX_UPLOAD_MB * 1024 * 1024:
             st.error(f'{MAX_UPLOAD_MB}MB 이하 사진만 올릴 수 있습니다.')
@@ -440,7 +445,7 @@ def photo_page():
                 try:
                     image = vision.prepare(Image.open(file))
                 except Exception:
-                    st.error('사진을 읽을 수 없습니다. JPG 또는 PNG 사진을 다시 선택해 주세요.')
+                    st.error('사진을 읽을 수 없습니다. JPG·PNG·HEIC 사진을 다시 선택해 주세요.')
                 else:
                     st.session_state.photo_draft = {'image': image, 'file_id': file_id}
     if 'photo_draft' not in st.session_state and st.session_state.get('last'):
@@ -489,14 +494,18 @@ def edit_inventory_table(last):
     if not rows:
         st.info('목록이 비어 있습니다. 사진에서 영역을 지정해 물건을 추가할 수 있습니다.')
         return
-    table = pd.DataFrame([{k: row.get(k, '') for k in ('집기명', '제조사', '개수', '모델명', '연식(년)')} for row in rows])
+    # 모바일(폭 375px)에서 연식 칸이 잘리지 않도록 입력이 필요한 칸을 앞으로, 폭을 고정 (2026-11-15)
+    table = pd.DataFrame([{k: row.get(k, '') for k in ('집기명', '개수', '연식(년)', '제조사', '모델명')} for row in rows])
     widget_key = f"inventory_{last['key']}_{last.get('table_revision', 0)}"
     st.data_editor(table, hide_index=True, use_container_width=True, num_rows='fixed',
                    disabled=['개수'], key=widget_key, on_change=apply_inventory_edit,
                    args=(last, rows, widget_key),
-                   column_config={'집기명': st.column_config.TextColumn(required=True),
-                                  '제조사': st.column_config.TextColumn(),
-                                  '개수': st.column_config.NumberColumn(format='%d개')})
+                   column_config={'집기명': st.column_config.TextColumn(required=True, width=66),
+                                  '개수': st.column_config.NumberColumn(format='%d개', width=46),
+                                  '연식(년)': st.column_config.TextColumn('연식', width=58,
+                                                                        help='몇 년 사용했는지 숫자 (1년 미만은 0.5)'),
+                                  '제조사': st.column_config.TextColumn(width=80),
+                                  '모델명': st.column_config.TextColumn()})
 
 
 @st.cache_data(ttl=3600, show_spinner=False)

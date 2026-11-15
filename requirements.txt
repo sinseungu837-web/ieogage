@@ -3,3 +3,4 @@ google-genai
 python-dotenv
 pillow
 pandas
+pillow-heif
