@@ -288,6 +288,12 @@ def _is_duplicate(a, b, mode):
     return iou > 0.6 or (inter / small > 0.9 and small / big >= 0.5)
 
 
+# 사람·건물 구조는 판매 대상이 아니므로 Gemini 가 내도 코드에서 버린다 (2026-11-15 팀 결정).
+# 이름 전체가 일치할 때만 (예: '천장형 에어컨'·'벽걸이 TV'·'천장 조명'은 물건이라 남김)
+EXCLUDED_NAMES = {"사람", "직원", "손님", "바리스타", "점원", "남자", "여자", "벽", "벽면", "외벽", "바닥", "천장",
+                  "기둥", "창문", "창", "유리창", "통창", "문", "출입문", "자동문", "계단", "천장 몰딩", "몰딩", "타일"}
+
+
 def detect_all(image, model: str | None = None, count_mode: str = "dedupe") -> tuple[dict, dict]:
     """[Gemini 단독 모드] 사진 전체를 1회 보고 판매 대상 물건을 박스·이름·분류와 함께 모두 찾는다.
     반환: (det, result) — 기존 RF-DETR 경로와 같은 형식이라 화면 코드를 그대로 쓴다."""
@@ -317,7 +323,8 @@ def detect_all(image, model: str | None = None, count_mode: str = "dedupe") -> t
         "- 화면이 달린 기계는 커피머신·포스기·키오스크·TV·디지털 메뉴보드 중 무엇인지 구분.",
         "- 확실하지 않으면 uncertain=true. 보이지 않는 물건은 절대 추가하지 말 것. 가격은 쓰지 말 것.",
     ] + ([
-        "- [중요] 걸러내지 말고 사진 속 카페·매장 물건을 웬만하면 모두 찾는다: 커피머신·그라인더·제빙기·냉장고·쇼케이스·온수기·블렌더·오븐, "
+        "- [중요] 단, 사람(직원·손님)과 건물 구조(벽·바닥·천장·기둥·창문·문·계단)는 물건이 아니므로 절대 출력하지 않는다.",
+        "- 그 외에는 걸러내지 말고 사진 속 카페·매장 물건을 웬만하면 모두 찾는다: 커피머신·그라인더·제빙기·냉장고·쇼케이스·온수기·블렌더·오븐, "
         "포스기·카드 단말기·키오스크·메뉴판 TV·모니터·스피커, 의자·테이블·소파·선반·수납장, 카운터·작업대·싱크대, 조명, 컵·시럽 등 재고.",
         "- 아래 [시세표]에 같은 물건이 있으면 name 은 표의 품목 이름 그대로 쓰고, 표에 없는 물건은 일반 한국어 이름(예: 포스기, 메뉴판 TV, 카운터)으로 쓴다.",
         "- 확실하지 않으면 빼지 말고 uncertain=true 로 넣는다. 사진에 물건이 보이는데 아무것도 출력하지 않는 일은 없어야 한다.",
@@ -353,6 +360,8 @@ def detect_all(image, model: str | None = None, count_mode: str = "dedupe") -> t
         name, b = str(it.get("name", "")).strip(), it.get("box_2d")
         if not name or not (isinstance(b, list) and len(b) == 4):
             continue  # 박스 근거가 없는 품목은 버림 (지어낸 물건 차단)
+        if re.sub(r"\s+", " ", name) in EXCLUDED_NAMES:
+            continue  # 사람·건물 구조 제외
         brand, model, basis = str(it.get("brand") or "").strip(), str(it.get("model") or "").strip(), ""
         if REFERENCE_ONLY:
             name = reference.item_key(name)
