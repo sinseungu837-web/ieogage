@@ -36,7 +36,7 @@ class ReferenceEstimateTest(unittest.TestCase):
         self.assertIn('시세표에 없는', got['source'])
 
     def test_single_row_passes_display_check(self):
-        out = normalize_estimate('제빙기', reference.estimate('제빙기', '카이저'))
+        out = normalize_estimate('제빙기', reference.estimate('제빙기', '아이스트로'))  # 제조사당 1모델
         self.assertEqual(out['n'], 1)
         self.assertIsNotNone(out['mid'])
         self.assertTrue(out['low'] <= out['mid'] <= out['high'])
