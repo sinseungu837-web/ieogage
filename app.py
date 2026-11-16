@@ -453,6 +453,14 @@ def edit_inventory_table(last):
     last['opened_at'] = opened
     if opened:
         st.caption(f'연식을 비워 둔 물품은 개업일 기준 {opening_years(last):g}년으로 계산합니다.')
+    def refresh_photo_layout():
+        # 사진 펼침으로 표 위치가 바뀌면 편집기의 클릭 좌표도 다시 계산한다.
+        last['table_revision'] = last.get('table_revision', 0) + 1
+
+    with st.expander('분석된 사진 확인', expanded=False,
+                     key=f"inventory_photo_{last['key']}", on_change=refresh_photo_layout):
+        st.image(draw_boxes(last['image'], last['det']['objects'], last['box_names']),
+                 use_container_width=True)
     rows = inventory_rows(last)
     if not rows:
         st.info('목록이 비어 있습니다. 이전 화면에서 사진에 영역을 그려 물품을 추가할 수 있습니다.')
