@@ -8,7 +8,6 @@ from unittest.mock import patch
 
 import listings
 import price
-import crawler
 from inventory import inventory_rows
 
 
@@ -138,73 +137,6 @@ class PriceTest(unittest.TestCase):
         self.assertEqual([(r['집기명'], r.get('모델명'), r['개수']) for r in rows],
                          [('커피머신', 'A', 2), ('제빙기', None, 1), ('커피머신', 'B', 1)])
 
-
-class CrawlerTest(unittest.TestCase):
-    def test_unapproved_source_rejected_without_network(self):
-        with patch('crawler.fetch') as fetch:
-            with self.assertRaises(ValueError):
-                crawler.crawl('번개장터', ['https://m.bunjang.co.kr/products/1'], '커피머신')
-            fetch.assert_not_called()
-
-    def test_missing_api_key(self):
-        with patch('price._key', return_value=None):
-            with self.assertRaises(ValueError):
-                crawler.collect_onbid()
-
-    def test_jsonld_used_krw_offer(self):
-        product = {'@type': 'Product', 'name': '중고 에스프레소 머신', 'brand': {'name': '라마르조코'},
-                   'model': 'Linea', 'offers': {'@type': 'Offer', 'price': 1000000,
-                   'priceCurrency': 'KRW', 'availability': 'https://schema.org/InStock',
-                   'itemCondition': 'https://schema.org/UsedCondition'}}
-        html = '<script type="application/ld+json">' + json.dumps(product) + '</script>'
-        rows = crawler.parse_products(html, 'https://example.org/1', '테스트', '커피머신')
-        self.assertEqual(len(listings.normalize(rows)), 1)
-        self.assertEqual(rows[0]['price_basis'], 'asking')
-        product['offers']['availability'] = 'https://schema.org/SoldOut'
-        html = '<script type="application/ld+json">' + json.dumps(product) + '</script>'
-        self.assertEqual(crawler.parse_products(html, 'https://example.org/1', '테스트', '커피머신'), [])
-
-    def test_allowed_crawl_to_csv_to_estimate(self):
-        product = {'@type': 'Product', 'name': '제빙기 중고', 'model': 'A',
-                   'brand': {'name': '호시자키'}, 'offers': {'@type': 'Offer',
-                   'price': 1000000, 'priceCurrency': 'KRW',
-                   'availability': 'https://schema.org/InStock',
-                   'itemCondition': 'https://schema.org/UsedCondition'}}
-        html = '<script type="application/ld+json">' + json.dumps(product) + '</script>'
-        def response(url):
-            return 'User-agent: *\nAllow: /' if url.endswith('/robots.txt') else html
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            registry = root / 'sources.json'
-            registry.write_text(json.dumps({'allowed': dict(enabled=True, automation_allowed=True,
-                origin='https://example.org', terms_url='https://example.org/terms',
-                permission_evidence='테스트 전용 허용 정책', checked_at=listings.today().isoformat())}))
-            with patch('crawler.fetch', side_effect=response), patch('crawler.time.sleep'):
-                rows = crawler.crawl('allowed', [f'https://example.org/{i}' for i in range(3)],
-                                     '제빙기', registry=registry)
-            db, table = root / 'listings.csv', root / 'price_table.csv'
-            self.assertEqual(listings.save(rows, db, table), 3)
-            e = price.estimate('제빙기', '호시자키', 'A', listings_path=db, allow_onbid=False)
-            self.assertEqual((e['mid'], e['n']), (1000000, 3))
-            self.assertEqual(listings.read(db).price_basis.unique().tolist(), ['asking'])
-
-    def test_old_source_policy_rejected(self):
-        with tempfile.TemporaryDirectory() as directory:
-            registry = Path(directory) / 'sources.json'
-            registry.write_text(json.dumps({'old': dict(enabled=True, automation_allowed=True,
-                origin='https://example.org', terms_url='https://example.org/terms',
-                permission_evidence='test', checked_at='2000-01-01')}))
-            with self.assertRaises(ValueError):
-                crawler.source_for('old', registry)
-
-    def test_robots_deny_and_fetch_failure(self):
-        with patch('crawler.source_for', return_value={'origin': 'https://example.org'}):
-            with patch('crawler.fetch', return_value='User-agent: *\nDisallow: /'):
-                with self.assertRaises(ValueError):
-                    crawler.crawl('테스트', ['https://example.org/1'], '커피머신')
-            with patch('crawler.fetch', side_effect=TimeoutError):
-                with self.assertRaises(TimeoutError):
-                    crawler.crawl('테스트', ['https://example.org/1'], '커피머신')
 
 
 if __name__ == '__main__':

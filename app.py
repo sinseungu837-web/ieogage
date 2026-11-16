@@ -17,8 +17,6 @@ import vision
 
 from box_selector import select_box, validated_box
 from inventory import inventory_rows
-import disposal_view
-from disposal import row_key, sync_states
 from estimate_view import safe_estimate
 import presentation
 
