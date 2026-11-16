@@ -31,10 +31,8 @@ class VendorTest(unittest.TestCase):
         self.assertFalse(r['ok'])
         self.assertTrue(r['links'][0].startswith('https://map.kakao.com/link/search/'))
 
-    def test_aliases_and_disposal(self):
+    def test_aliases(self):
         self.assertEqual(vendors.queries_for('커피머신'), vendors.QUERIES['에스프레소 머신'])
-        with patch.object(vendors, '_call', side_effect=fake_call):
-            self.assertEqual(vendors.search('x', '성북구', key='k', disposal=True)['queries'], ['폐업 철거'])
 
     def test_region_and_address_pass_through(self):
         for region in ('서울 마포구', '경기 양평군', '전남 순천시', '서울 마포구 월드컵로 240'):
@@ -48,12 +46,6 @@ class VendorTest(unittest.TestCase):
                 self.assertEqual(len(call.call_args_list), 2)
                 self.assertEqual(call.call_args_list[1].kwargs['query'], region)
                 self.assertIn('지역명 또는 주소', result['reason'])
-
-    def test_quote_request_facts(self):
-        text = vendors.quote_request([{'집기명': '제빙기', '제조사': '카이저', '모델명': 'IMK-3051', '개수': 1, '연식(년)': '3'}],
-                                     [{'mid': 400000}])
-        self.assertIn('제빙기 (카이저 IMK-3051) 1개 / 사용 3년 / 참고 중고가 개당 400,000원', text)
-        self.assertIn('철거·운반', text)
 
 
 if __name__ == '__main__':

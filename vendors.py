@@ -35,7 +35,6 @@ QUERIES = {
     '스탠드 믹서': ['중고주방'], '전자레인지': ['중고주방', '중고가전'], '와플 메이커': ['중고주방'],
 }
 FALLBACK_QUERY = '중고주방'
-DISPOSAL_QUERY = '폐업 철거'
 # 검색어와 무관한 업종(예: '주방기기' 검색의 다이소)을 거르기 위한 업종 단어
 GOOD_CATEGORY = ('중고', '주방', '가구', '전자제품', '냉난방', '시공', '철거', '렌탈', '재활용', '정보통신', '통신기기', '음향', '조명')
 
@@ -82,10 +81,10 @@ def queries_for(item):
     return QUERIES.get(item_key(item), [FALLBACK_QUERY])
 
 
-def search(item, region, limit=3, key=None, disposal=False):
+def search(item, region, limit=3, key=None):
     """반환: {'ok': bool, 'places': [...], 'queries': [...], 'area': str, 'reason': str}"""
     key = key or api_key()
-    queries = [DISPOSAL_QUERY] if disposal else queries_for(item)
+    queries = queries_for(item)
     out = {'ok': False, 'places': [], 'queries': queries, 'area': region, 'reason': '',
            'links': [map_link(region, q) for q in queries]}
     if not region.strip():
@@ -121,17 +120,3 @@ def search(item, region, limit=3, key=None, disposal=False):
         out['reason'] = f'업체 검색 실패 ({type(exc).__name__}). 카카오맵 검색 링크로 안내합니다.'
     return out
 
-
-def quote_request(rows, estimates):
-    """여러 업체에 똑같이 보낼 견적 요청서 (사실만, 코드가 조립)."""
-    lines = ['[매입 견적 요청]', '카페 폐업으로 아래 물품의 일괄 매입 견적을 요청드립니다.', '']
-    for r, e in zip(rows, estimates):
-        ident = ' '.join(str(r.get(k, '')).strip() for k in ('제조사', '모델명') if r.get(k) and r[k] != '미확인')
-        years = str(r.get('연식(년)', '')).strip()
-        price = f" / 참고 중고가 개당 {e['mid']:,}원" if e.get('mid') else ''
-        lines.append(f"- {r['집기명']}{' (' + ident + ')' if ident else ''} {r['개수']}개"
-                     f"{' / 사용 ' + years + '년' if years else ''}{price}")
-    lines += ['', '확인하고 싶은 점:', '1. 철거·운반 비용이 매입가에 포함되나요?',
-              '2. 매입가는 어떤 기준으로 정하시나요? (연식·상태·브랜드)',
-              '3. 방문 견적과 수거 가능한 날짜는 언제인가요?', '', '사진은 별도로 보내 드리겠습니다.']
-    return '\n'.join(lines)
