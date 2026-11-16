@@ -3,7 +3,7 @@
   --fs-ink: #171916;
   --fs-muted: #656861;
   --fs-paper: #f4f2eb;
-  --fs-surface: #fbfaf5;
+  --fs-surface: #F5F5F5;
   --fs-coral: #ed744f;
   --fs-sky: #a9cbd0;
   --fs-sage: #bdcdb8;
@@ -33,7 +33,7 @@ hr { border-color: var(--fs-line); margin: .8rem 0; }
 .fs-brand-logo { display: block; width: 100%; height: 100%; object-fit: contain; transform: scale(2.65); }
 .fs-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; padding: 0 !important; margin: 3px 0 14px; list-style: none; }
 .fs-step { display: flex; align-items: center; justify-content: center; min-width: 0; text-align: center; gap: 9px; color: var(--fs-muted); min-height: 48px; border-bottom: 1px solid var(--fs-line); font-size: 12px; }
-.fs-step b { width: 28px; height: 28px; display: inline-grid; place-items: center; flex-shrink: 0; background: #e9e8df; border-radius: 9px; font-size: 11px; font-weight: 650; }
+.fs-step b { width: 28px; height: 28px; display: inline-grid; place-items: center; flex-shrink: 0; background: #EDEDED; border-radius: 9px; font-size: 11px; font-weight: 650; }
 .fs-step[aria-current="step"] { color: var(--fs-ink); font-weight: 700; border-color: var(--fs-coral); }
 .fs-step[aria-current="step"] b { background: var(--fs-coral); color: var(--fs-ink); }
 .fs-kicker { display: flex; justify-content: space-between; gap: 12px; color: var(--fs-muted); font-size: 10px; line-height: 1.5; font-weight: 650; letter-spacing: .07em; margin: 2px 0 12px; }
@@ -42,7 +42,7 @@ hr { border-color: var(--fs-line); margin: .8rem 0; }
 .st-key-page_0 [data-testid="stMarkdownContainer"] > p { color: var(--fs-muted); font-size: 14px; line-height: 1.7; }
 .fs-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
 .fs-stat { padding: 18px; border: 1px solid var(--fs-line); border-radius: 18px; background: var(--fs-surface); }
-.fs-stat:first-child { background: #e6e8dd; }
+.fs-stat:first-child { background: #F5F5F5; }
 .fs-stat strong { display: block; font-size: 30px; line-height: 1; font-weight: 740; letter-spacing: -.055em; }
 .fs-stat span { display: block; margin-top: 8px; color: var(--fs-muted); font-size: 11px; line-height: 1.5; }
 .fs-chapter { display: flex; gap: 12px; align-items: center; border-top: 1px solid var(--fs-line); padding: 18px 0 3px; }
@@ -57,7 +57,7 @@ button[kind="primary"] { background: var(--fs-ink); color: var(--fs-paper); bord
 button[kind="primary"] p { color: var(--fs-paper) !important; }
 button[kind="primary"]:hover { background: #30352e; color: var(--fs-paper); border-color: #30352e; }
 button[kind="secondary"], [data-testid="stDownloadButton"] button { background: var(--fs-surface); border: 1px solid var(--fs-line); color: var(--fs-ink); }
-button[kind="secondary"]:hover, [data-testid="stDownloadButton"] button:hover { background: #e9ece2; color: var(--fs-ink); border-color: #949a8d; }
+button[kind="secondary"]:hover, [data-testid="stDownloadButton"] button:hover { background: #EAEAEA; color: var(--fs-ink); border-color: #949a8d; }
 button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid rgba(237,116,79,.55) !important; outline-offset: 3px; }
 button:disabled { opacity: .45; }
 [data-testid="stTextInputRootElement"], [data-testid="stSelectbox"] [data-baseweb="select"] > div {
@@ -78,7 +78,7 @@ iframe[title="box_selector.box_selector"] { border-radius: 18px; border: 1px sol
 [data-testid="stDataFrame"] { border: 1px solid var(--fs-line); border-radius: 14px; overflow: hidden; }
 [data-testid="stExpander"] details { background: var(--fs-surface); border-color: var(--fs-line); border-radius: 16px; }
 [data-testid="stExpander"] summary { min-height: 48px; }
-.st-key-estimate_summary { background: #FFE4CC; border: 1px solid var(--fs-line); border-radius: 22px; padding: 24px; margin-bottom: 8px; }
+.st-key-estimate_summary { background: #F5F5F5; border: 1px solid var(--fs-line); border-radius: 22px; padding: 24px; margin-bottom: 8px; }
 .st-key-estimate_summary [data-testid="stAlertContainer"]:has([data-testid="stAlertContentWarning"]) { background-color: #FFF9F2; }
 .fs-total-label { margin: 0; font-size: 14px; font-weight: 600; color: var(--fs-muted); letter-spacing: -.02em; }
 .stApp .st-key-estimate_summary [data-testid="stMarkdownContainer"] h3 { font-size: clamp(23px, 3.3vw, 36px); line-height: 1.3; color: var(--fs-ink); letter-spacing: -.045em; overflow-wrap: anywhere; }
