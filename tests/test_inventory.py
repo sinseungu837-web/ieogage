@@ -19,6 +19,14 @@ class InventoryTest(unittest.TestCase):
         self.assertEqual([(r['제조사'], r['개수']) for r in inventory_rows(last)],
                          [('A사', 1), ('B사', 1), ('미확인', 1)])
 
+    def test_multiple_items_and_model_groups(self):
+        last = {'det': {'objects': [{'id': i} for i in range(1, 5)]},
+                'box_names': {1: '커피머신', 2: '커피머신', 3: '제빙기', 4: '커피머신'},
+                'manufacturers': {}, 'models': {1: 'A', 2: 'A', 4: 'B'}}
+        rows = inventory_rows(last)
+        self.assertEqual([(r['집기명'], r.get('모델명'), r['개수']) for r in rows],
+                         [('커피머신', 'A', 2), ('제빙기', None, 1), ('커피머신', 'B', 1)])
+
 
 if __name__ == '__main__':
     unittest.main()

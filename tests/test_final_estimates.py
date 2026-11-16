@@ -90,7 +90,7 @@ ns['final_page'](last)
             if name == '의자':
                 raise AttributeError('모듈 불일치 재현')
             return GOOD
-        with patch.object(price, 'estimate', side_effect=lookup), patch.object(price, 'empty_estimate', side_effect=AssertionError('호출 금지')):
+        with patch.object(price, 'service_estimate', side_effect=lookup), patch.object(price, 'empty_estimate', side_effect=AssertionError('호출 금지')):
             page = self.render()
         self.assertEqual(len(page.exception), 0)
         prices = page.dataframe[0].value
@@ -102,11 +102,10 @@ ns['final_page'](last)
         self.assertTrue(any('합계에서 제외' in value.value for value in page.warning))
         self.assertTrue(any('### 약 150,000원' in value.value for value in page.markdown))  # 대표가 + 범위
 
-    def test_empty_real_db_without_api_key(self):
-        # 실제 DB 에 매물이 쌓였으므로, '빈 DB + 키 없음' 조건은 존재하지 않는 임시 경로로 재현한다.
-        import listings
-        with patch.object(price, '_key', return_value=None), \
-                patch.object(listings, 'LISTINGS', ROOT / 'data' / '_empty_for_test.csv'):
+    def test_items_not_in_table(self):
+        # 시세표에 없는 품목만 있으면 가격 없이 화면이 뜬다
+        import reference
+        with patch.object(reference, 'estimate', return_value=None):
             page = self.render()
         self.assertEqual(len(page.exception), 0)
         self.assertTrue(page.dataframe[0].value['개당 예상 중고가 (원)'].isna().all())
