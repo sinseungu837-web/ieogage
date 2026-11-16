@@ -28,8 +28,9 @@ a { color: #944126; text-underline-offset: 3px; }
 hr { border-color: var(--fs-line); margin: .8rem 0; }
 .fs-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 0 0 22px; border-bottom: 1px solid var(--fs-line); }
 .fs-brand { margin: 0; display: flex; align-items: center; gap: 10px; color: var(--fs-ink); font-size: 23px; font-weight: 780; letter-spacing: -.06em; }
-.fs-mark { width: 35px; height: 35px; flex-shrink: 0; display: grid; place-items: center; }
-.fs-brand-logo { display: block; width: 100%; height: 100%; object-fit: contain; }
+.fs-mark { width: 35px; height: 35px; flex-shrink: 0; display: grid; place-items: center; overflow: hidden; }
+/* 첨부 로고의 바깥 여백을 CSS로 확대해 기존 아이콘 영역에 맞춘다. 원본 비율·색상은 유지. */
+.fs-brand-logo { display: block; width: 100%; height: 100%; object-fit: contain; transform: scale(2.65); }
 .fs-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; padding: 0 !important; margin: 3px 0 14px; list-style: none; }
 .fs-step { display: flex; align-items: center; justify-content: center; min-width: 0; text-align: center; gap: 9px; color: var(--fs-muted); min-height: 48px; border-bottom: 1px solid var(--fs-line); font-size: 12px; }
 .fs-step b { width: 28px; height: 28px; display: inline-grid; place-items: center; flex-shrink: 0; background: #e9e8df; border-radius: 9px; font-size: 11px; font-weight: 650; }
