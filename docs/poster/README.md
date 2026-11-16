@@ -1,5 +1,14 @@
 # 이어가게 A0 포스터
 
+## 사용자 비교 실험 반영본 v3
+
+- [최신 PDF](v3/ieogage_A0_v3_print.pdf)
+- [최신 미리보기](v3/ieogage_A0_v3_preview.png)
+- [최신 PowerPoint](v3/ieogage_A0_v3_editable.pptx)
+- [최신 전체 파일·글꼴 ZIP](v3/ieogage_A0_v3_complete.zip)
+
+사용자가 제공한 10명 비교 실험의 시간·5점 척도 결과를 추가했습니다. 가격 신뢰도는 2.8→2.8로 동일한 결과임을 표시했습니다. 요청한 상단 두 문구를 삭제하고 그림을 제목 쪽으로 옮겼습니다. [수정 내용](v3/README.md)
+
 ## 피드백 반영본 v2
 
 - [수정본 PDF](v2/ieogage_A0_v2_print.pdf)
