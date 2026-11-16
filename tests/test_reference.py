@@ -132,23 +132,60 @@ class CountModeTest(unittest.TestCase):
 
 
 class AgePriceTest(unittest.TestCase):
-    """시세 범위 + 연식 위치 (2026-11-15 팀 확정 데이터 기준)."""
-    def test_straight_line_over_five_years(self):
-        # 정액법: 상한에서 60개월 동안 균등하게 하한까지 (2026-11-16 법령 기반 공식)
-        self.assertEqual(reference.position_by_age(9500000, 11500000, 1)[0], 11100000)
-        self.assertEqual(reference.position_by_age(9500000, 11500000, 3)[0], 10300000)
-        self.assertEqual(reference.position_by_age(9500000, 11500000, 0.5)[0], 11300000)
-        self.assertEqual(reference.position_by_age(9500000, 11500000, 13 / 12)[0], 11067000)
+    """법정 정률법 (2026-11-16 팀 지시문: 법인세법 시행령 제26조, 시행규칙 별표4·5·6)."""
+    def test_declining_balance_5_year_rate(self):
+        r = 0.451  # 별표4 내용연수 5년 정률
+        self.assertAlmostEqual(reference.declining_balance(r, 12), 0.549)
+        self.assertAlmostEqual(reference.declining_balance(r, 36), 0.549 ** 3)
+        self.assertIsNone(reference.declining_balance(r, 60))   # 5년차: 잔액 4.99% ≤ 5% → 상각 종료
+        self.assertIsNone(reference.declining_balance(r, 72))   # 내용연수 초과
+        self.assertAlmostEqual(reference.declining_balance(r, 59), 0.549 ** 4 * (1 - r * 11 / 12))  # 종료 직전
 
-    def test_month_rounding_and_stop_after_five_years(self):
-        # 1개월 미만은 1개월
-        self.assertEqual(reference.months_of(0.01), 1)
-        self.assertEqual(reference.months_of(1.0), 12)
-        # 5년 이상은 하한에서 멈춤, 신품가는 쓰지 않음
-        for y in (5, 8, 30):
-            mid, low, high, note = reference.position_by_age(2000000, 2800000, y, new_price=4850000)
-            self.assertEqual((mid, low, high), (2000000, 2000000, 2800000))
-            self.assertIn('감가 종료', note)
+    def test_declining_balance_8_year_rate(self):
+        r = 0.313  # 별표4 내용연수 8년 정률 (별표6 음식점 및 주점업)
+        for years in (1, 3, 5):
+            self.assertAlmostEqual(reference.declining_balance(r, years * 12), 0.687 ** years)
+        self.assertIsNone(reference.declining_balance(r, 96))   # 8년차: 잔액 4.96% ≤ 5% → 상각 종료
+
+    def test_months_and_zero_year(self):
+        self.assertEqual(reference.months_of(0), 1)       # 1개월 미만은 1개월 (제26조 제9항)
+        self.assertEqual(reference.months_of(1.5), 18)
+        self.assertAlmostEqual(reference.declining_balance(0.451, 18), 0.549 * (1 - 0.451 * 6 / 12))  # 월수 비례
+        self.assertAlmostEqual(reference.declining_balance(0.451, 1), 1 - 0.451 / 12)
+
+    def test_confirmed_asset_uses_declining_balance(self):
+        e = reference.estimate('의자', '톤', '체어 14', '', 3)   # 신품가 185,000 · 비품 5년
+        self.assertEqual(e['method'], '법정 정률법')
+        self.assertEqual((e['low'], e['mid'], e['high']), (31000, 31000, 31000))   # 185,000 × 0.549³ = 30,612
+        self.assertIn('별표4', e['law'])
+        self.assertTrue(any('45.1%' in s and '5년' in s for s in e['calc']))
+        self.assertTrue(any('185,000 × (1 − 0.451)^3' in s for s in e['calc']))
+        self.assertEqual(reference.estimate('의자', '톤', '체어 14', '', 1)['mid'], 102000)
+
+    def test_fallbacks_to_survey_mid(self):
+        ended = reference.estimate('의자', '톤', '체어 14', '', 5)    # 법정 상각 종료
+        self.assertEqual((ended['method'], ended['mid']), ('조사 시세 중간값', 75000))
+        self.assertTrue(any('상각 종료' in s for s in ended['calc']))
+        none = reference.estimate('의자', '톤', '체어 14')            # 연식·개업일 미입력
+        self.assertEqual((none['method'], none['mid'], none['low'], none['high']), ('조사 시세 중간값', 75000, 60000, 90000))
+        unclear = reference.estimate('커피머신', '훼마', 'E98 UP', '', 3)   # 자산 분류 미확정
+        self.assertEqual((unclear['method'], unclear['mid']), ('조사 시세 중간값', 2400000))
+        self.assertTrue(any('분류 미확정' in s for s in unclear['calc']))
+        with patch.object(reference, 'rows', return_value=[dict(r, new_price=None) for r in reference.rows()]):
+            no_new = reference.estimate('의자', '톤', '체어 14', '', 3)   # 신품가 없음
+        self.assertEqual((no_new['method'], no_new['mid']), ('조사 시세 중간값', 75000))
+        self.assertIsNone(reference.estimate('화분', '', '', '', 3))     # 조사 시세도 없음 → 산정 불가
+
+    def test_asset_mapping_covers_all_items(self):
+        import csv
+        with open(reference.ASSET_PATH, encoding='utf-8-sig') as f:
+            mapped = {r['item']: r for r in csv.DictReader(f)}
+        self.assertEqual(set(mapped), set(reference.items()))
+        for r in mapped.values():   # 확인된 품목은 별표4 값만 (5년 0.451, 8년 0.313)
+            if r['confirmed'] == 'Y':
+                self.assertIn((r['life_years'], r['db_rate']), {('5', '0.451'), ('8', '0.313')})
+            else:
+                self.assertEqual((r['life_years'], r['db_rate']), ('', ''))
 
     def test_parse_years(self):
         self.assertEqual(reference.parse_years('3년'), 3.0)
@@ -156,17 +193,14 @@ class AgePriceTest(unittest.TestCase):
         self.assertEqual(reference.parse_years('1년 1개월') * 12, 13)
         self.assertEqual(reference.parse_years('8개월') * 12, 8)
         self.assertIsNone(reference.parse_years(''))
-
-    def test_estimate_with_years_has_range_and_calc(self):
-        e = reference.estimate('커피머신', '훼마', 'E98 UP', '', 3)
-        self.assertEqual((e['low'], e['mid'], e['high']), (2000000, 2320000, 2800000))
-        self.assertTrue(any('정액법' in s for s in e['calc']))
-        self.assertTrue(any('근거' in s for s in e['calc']))
+        self.assertIsNone(reference.parse_years('-3'))   # 음수 연식 무효
 
     def test_user_maker_model_matches_table_product(self):
         # 물품명이 시세표에 없어도 제조사+모델이 맞으면 그 제품 시세 (2026-11-16)
         e = reference.estimate('주방기기', '훼마', 'E98 UP', '', 3)
-        self.assertEqual((e['low'], e['mid'], e['high']), (2000000, 2320000, 2800000))
+        self.assertEqual((e['low'], e['mid'], e['high']), (2000000, 2400000, 2800000))
+        chair = reference.estimate('가구', '톤', '체어 14', '', 3)   # 품목명이 달라도 매칭된 제품의 자산 분류 적용
+        self.assertEqual((chair['method'], chair['mid']), ('법정 정률법', 31000))
         self.assertIn('동일 제품', e['match'])
         # AI 가 다른 품목으로 잡았어도 입력 모델 우선 (그라인더로 잡힌 훼마 머신)
         self.assertEqual(reference.estimate('커피 그라인더', 'FAEMA', 'E98 UP 2GR')['n'], 1)

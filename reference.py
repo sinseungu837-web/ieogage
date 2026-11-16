@@ -96,7 +96,7 @@ def find_product(manufacturer, model):
     """품목 이름과 상관없이 제조사+모델명이 시세표의 한 제품과 맞으면 그 행들을 돌려준다 (2026-11-16).
     예: 물품명을 '주방기기'로 적었거나 AI 가 다른 품목으로 잡아도, 제조사 '훼마'·모델 'E98 UP' 이면 그 제품 시세로 계산."""
     m, v = listings.token(_clean(manufacturer)), listings.token(_clean(model))
-    if len(m) < 2 or len(v) < 2:
+    if not m or len(v) < 2:  # 제조사는 한 글자('톤')도 허용, 모델명은 2글자 이상
         return []
     hits = []
     for r in rows():
@@ -113,21 +113,21 @@ def find_product(manufacturer, model):
     return [r for _, r in hits if r['model'] == model_name]
 
 
-# 2026-11-16 법령 기반으로 교체 (팀 가정 0개):
-#  - 거래사례(중고 시세)로 평가: 감정평가 실무기준(국토교통부 고시) 630 기계기구류 1.3 ②
-#  - 기구·비품 기준내용연수 5년: 법인세법 시행령 제28조, 시행규칙 제15조
-#  - 정액법(매년 균등), 개월 단위·1개월 미만은 1개월: 법인세법 시행령 제26조 제2항 제1호·제9항
-#  - 내용연수 경과 후 감가 종료: 같은 조 제6항·제7항
-LIFE_YEARS = 5
-LIFE_BASIS = ('감정평가 실무기준 630 1.3②(거래사례 기준) · 법인세법 시행령 제26조(정액법·월할)·'
-              '제28조(기구·비품 기준내용연수 5년)')
+# 2026-11-16 팀 지시문: 법정 정률법 (법인세법 시행령 제26조 제2항 제2호, 시행규칙 별표4 상각률)
+#  - 품목별 자산 분류·기준내용연수·상각률은 data/asset_classes.csv (confirmed=Y 인 품목만 적용)
+#  - 잔존가액: 미상각잔액이 처음 취득가액의 5% 이하가 되는 해에 상각 종료 (시행령 제26조 제6·7항)
+#  - 1년 미만 기간은 월수 비례, 1개월 미만은 1개월 (시행령 제26조 제8·9항)
+#  - 분류 미확정·신품가 없음·상각 종료·연식 미입력 → 조사 중고 시세 중간값 (L + U) ÷ 2
+ASSET_PATH = Path(__file__).parent / 'data' / 'asset_classes.csv'
+RESIDUAL_RATE = 0.05   # 시행령 제26조 제6항 "취득가액의 100분의 5"
+NOTICE = '본 가격은 법정 감가상각률을 참고하여 산출한 예상가격으로, 실제 거래가격 또는 공인 감정평가액과 다를 수 있습니다.'
 DATA_BASIS = '팀 조사 시세 (전문 커뮤니티 장터의 브랜드별 가격 방어율 · B2B 중고주방 시세 · 개인 직거래 시세 종합)'
 
 
 def parse_years(value):
     """'3', '3년', '1년 1개월', '13개월', '1년 미만' → 연식(년, 실수). 모르면 None."""
     text = str(value or '').strip()
-    if not text:
+    if not text or text.startswith('-'):  # 음수 연식은 무효
         return None
     if '미만' in text:
         return 0.5
@@ -144,15 +144,37 @@ def months_of(years):
     return max(1, math.ceil(round(years * 12, 6)))
 
 
-def position_by_age(low, high, years, new_price=None):
-    """정액법: 시세 상한에서 5년 동안 매년 균등하게 하한까지, 5년 이후 하한. 반환: (대표가, 하한, 상한, 설명).
-    new_price 는 계산에 쓰지 않는다 (호출 호환용)."""
-    months = months_of(years)
-    if months >= LIFE_YEARS * 12:
-        return low, low, high, (f'사용 {months}개월(5년 이상) → 내용연수 경과로 감가 종료, 시세 하한 '
-                                '(실제 매입가는 하한보다 낮을 수 있음)')
-    mid = high - (high - low) * months / (LIFE_YEARS * 12)
-    return int(round(mid, -3)), low, high, f'사용 {months}개월 → 상한에서 5년간 매년 균등 감가(정액법)'
+@lru_cache(maxsize=4)
+def _assets(path, mtime_ns):
+    with open(path, encoding='utf-8-sig') as f:
+        return {r['item']: r for r in csv.DictReader(f)}
+
+
+def asset_class(item):
+    """품목의 법정 자산 분류. 분류가 확인된(confirmed=Y) 품목만 dict, 아니면 None."""
+    try:
+        row = _assets(ASSET_PATH, ASSET_PATH.stat().st_mtime_ns).get(item_key(item))
+    except OSError:
+        return None
+    if not row or row.get('confirmed') != 'Y':
+        return None
+    return {'class': row['asset_class'], 'life': int(row['life_years']), 'rate': float(row['db_rate']), 'law': row['law']}
+
+
+def declining_balance(rate, months):
+    """정률법 미상각잔액 비율. 12개월 단위로 잔액 × 상각률, 남은 개월은 월수 비례(× 개월 ÷ 12).
+    잔액이 처음 취득가액의 5% 이하가 되는 기간에 상각 종료 → None 반환 (시행령 제26조 제6·7항)."""
+    full, rest = divmod(months, 12)
+    ratio = 1.0
+    for m in [12] * full + ([rest] if rest else []):
+        ratio -= ratio * rate * m / 12
+        if ratio <= RESIDUAL_RATE:
+            return None
+    return ratio
+
+
+def _round_won(value):
+    return int(round(value, -3)) if value >= 10000 else int(round(value, -2))
 
 
 def estimate(name, manufacturer='', model='', spec='', years=None):
@@ -186,16 +208,38 @@ def estimate(name, manufacturer='', model='', spec='', years=None):
     basis = (f"{sel[0]['manufacturer']} {sel[0]['model']}" if len(sel) == 1 else f"{match} {len(sel)}개 모델")
     calc = [f"기준: {basis}" + (f" (신품가 {new:,}원)" if new else ""),
             f"중고 시세 범위: {low:,} ~ {high:,}원" + (f" · {sel[0]['note']}" if len(sel) == 1 and sel[0]['note'] else "")]
-    if years is not None:
-        mid, low, high, how = position_by_age(low, high, years, new)
-        calc.append(how)
+    survey_mid = _round_won((low + high) / 2)
+    asset = asset_class(sel[0]['item'])
+    method, law = '조사 시세 중간값', ''
+    if years is None:
+        mid, why = survey_mid, '연식·개업일 미입력'
+    elif not asset:
+        mid, why = survey_mid, '법정 자산 분류 미확정 품목'
+    elif not new:
+        mid, why = survey_mid, '신품가 없음'
     else:
-        mid = int(round((low + high) / 2, -3))
-        calc.append('연식 미입력 → 범위 중간값 (2단계 표에 연식이나 개업일을 넣으면 연식대로 계산합니다)')
-    mid = min(max(mid, low), high)
-    calc.append(f"예상 중고가 {mid:,}원 (범위 {low:,} ~ {high:,}원)")
-    calc.append(f"근거: {DATA_BASIS}")
+        months = months_of(years)
+        ratio = declining_balance(asset['rate'], months)
+        if ratio is None:
+            mid, why = survey_mid, f'사용 {months}개월 시점에 법정 상각 종료(잔액 ≤ 취득가액 5%)'
+        else:
+            mid = _round_won(new * ratio)
+            low = high = mid
+            method, law = '법정 정률법', f"{asset['law']} · 법인세법 시행령 제26조"
+            full, rest = divmod(months, 12)
+            expr = f"{new:,} × (1 − {asset['rate']})^{full}" + (f" × (1 − {asset['rate']} × {rest}/12)" if rest else '')
+            calc = [f"기준: {basis}",
+                    f"신품가: {new:,}원",
+                    f"사용기간: {months}개월 ({full}년" + (f" {rest}개월)" if rest else ")"),
+                    f"법정 자산 분류: {asset['class']} · 기준내용연수 {asset['life']}년 · 정률법 상각률 {asset['rate'] * 100:.1f}%",
+                    f"계산식: {expr}",
+                    f"예상가격: 약 {mid:,}원",
+                    f"근거: {law}"]
+    if method == '조사 시세 중간값':
+        calc.append(f"{why} → 조사 중고 시세 중간값 ({low:,} + {high:,}) ÷ 2 = {survey_mid:,}원")
+        calc.append(f"근거: {DATA_BASIS}")
     return {'low': low, 'mid': mid, 'high': high, 'n': len(sel), 'price_basis': 'reference',
+            'method': method, 'law': law, 'new_price': new,
             'confidence': conf, 'match': match + ' (팀 조사 시세표)', 'collected_at': SURVEYED_AT,
             'source': f"{DATA_BASIS} · {basis}", 'calc': calc,
             'search_url': 'https://search.daum.net/search?q=' + re.sub(r'\s+', '+', f"{basis} 중고"),

@@ -451,7 +451,8 @@ def edit_inventory_table(last):
                            key=f"opened_{last['key']}")
     last['opened_at'] = opened
     if opened:
-        st.caption(f'연식을 비워 둔 물품은 개업일 기준 {years_text(opening_years(last))}으로 계산합니다.')
+        st.caption(f'연식을 비워 둔 물품은 개업일 기준 {years_text(opening_years(last))}으로 계산합니다. '
+                   '개업일은 실제 구입일과 다를 수 있습니다.')
     def refresh_photo_layout():
         # 사진 펼침으로 표 위치가 바뀌면 편집기의 클릭 좌표도 다시 계산한다.
         last['table_revision'] = last.get('table_revision', 0) + 1
@@ -541,9 +542,10 @@ def final_page(last):
     with st.container(key='estimate_summary', border=True):
         if priced:
             st.markdown(f'### 약 {mid:,}원')
-            st.markdown(f'**{low:,}원 ~ {high:,}원** (물품별 시세 범위 합계)')
-            st.caption('팀 조사 시세(전문 커뮤니티 장터·B2B 중고주방·개인 직거래 시세 종합)에 기반한 것이며, '
-                       '시세 및 판매처에 따라 차이가 있을 수 있습니다.')
+            if low != high:
+                st.markdown(f'**{low:,}원 ~ {high:,}원** (물품별 범위 합계)')
+            st.caption('법정 감가상각률(법인세법 시행규칙 별표4) 또는 팀 조사 중고 시세에 기반한 예상가격이며, '
+                       '실제 거래가격 또는 공인 감정평가액과 다를 수 있습니다.')
             if len(priced) < len(rows):
                 st.warning(f'가격 정보가 없는 {len(rows) - len(priced)}개 품목은 합계에서 제외했습니다.')
         else:
@@ -555,8 +557,11 @@ def final_page(last):
     table = pd.DataFrame([{k: row.get(k, '') for k in ('집기명', '개수', '연식(년)', '제조사', '모델명')} for row in rows])
     prices = table.copy()
     prices['개당 예상 중고가 (원)'] = [x['mid'] for x in e]
-    prices['개당 범위'] = [f"{x['low']:,}~{x['high']:,}" if x['low'] is not None else '' for x in e]
+    prices['개당 범위'] = [('법정 정률법 계산' if x.get('method') == '법정 정률법' else f"{x['low']:,}~{x['high']:,}")
+                       if x['low'] is not None else '' for x in e]
     prices['합계 (원)'] = [x['mid'] * c if x['mid'] is not None else None for x, c in zip(e, prices['개수'])]
+    prices['산정 방식'] = [x.get('method', '') if x['mid'] is not None else '가격 산정 불가' for x in e]
+    prices['근거'] = [x.get('law') or ('팀 조사 중고 시세' if x['mid'] is not None else '') for x in e]
     head_l, head_r = st.columns([3, 2], vertical_alignment='bottom')
     head_l.subheader('물품별 가격 · 시세')
     head_r.download_button('CSV 내려받기', prices.rename(columns={'집기명': '물품명', '개당 범위': '범위(원)'}).to_csv(index=False).encode('utf-8-sig'),
@@ -578,10 +583,10 @@ def final_page(last):
             if r.get('연식 근거'):
                 lines.insert(0, f"연식 {r['연식(년)']} ({r['연식 근거']})")
             st.markdown('\n'.join(f'- {line}' for line in lines))
-        st.caption('산정 방식: 개당 가격 = 상한 − (상한 − 하한) × 사용 개월 ÷ 60, 5년 이상은 하한. '
-                   '근거: 거래사례(중고 시세) 기준 평가 — 감정평가 실무기준 630 기계기구류 1.3②, '
-                   '기구·비품 기준내용연수 5년·정액법·월할 계산·내용연수 경과 후 감가 종료 — 법인세법 시행령 제26조·제28조. '
-                   '세법의 감가 방식을 팀 조사 중고 시세 범위에 적용한 참고 시세이며, 개별 매물 원문 링크는 없습니다.')
+        st.caption('산정 방식: 법정 자산 분류가 확인된 품목은 신품가 × (1 − 상각률)^사용연수 '
+                   '(정률법, 법인세법 시행령 제26조 · 시행규칙 별표4·5·6, 1년 미만 기간은 월수 비례). '
+                   '분류 미확정·신품가 없음·연식 미입력·법정 상각 종료(잔액 ≤ 취득가액 5%) 품목은 팀 조사 중고 시세 중간값. '
+                   + reference.NOTICE)
     with st.container(key='page_actions'):
         left, right = st.columns(2)
         if left.button('← 이전 화면', use_container_width=True):

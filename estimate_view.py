@@ -25,7 +25,7 @@ def normalize_estimate(name, result):
     normalized = unavailable_estimate(name)
     if isinstance(result.get('calc'), list):
         normalized['calc'] = [str(x) for x in result['calc']]  # 계산 과정 문구 (원할 때만 펼쳐 보기)
-    for key in ('source', 'search_url', 'collected_at', 'match', 'confidence', 'price_basis'):
+    for key in ('source', 'search_url', 'collected_at', 'match', 'confidence', 'price_basis', 'method', 'law'):
         value = result.get(key)
         if isinstance(value, str) and value:
             normalized[key] = value

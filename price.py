@@ -280,6 +280,13 @@ def new_price_estimate(name: str) -> dict:
 
 # 새 경로: 사전 수집 CSV 우선. 게시 가격과 공매 낙찰가는 결합하지 않는다.
 def db_revision():
+    """앱 캐시 키: 시세표·자산 분류 파일이 바뀌면 가격을 다시 계산한다."""
+    if REFERENCE_ONLY:
+        import reference
+        try:
+            return tuple(p.stat().st_mtime_ns for p in (reference.PATH, reference.ASSET_PATH))
+        except OSError:
+            return None
     from listings import LISTINGS
     try:
         stat = LISTINGS.stat()
