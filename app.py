@@ -542,8 +542,7 @@ def final_page(last):
     with st.container(key='estimate_summary', border=True):
         if priced:
             st.markdown(f'### 약 {mid:,}원')
-            if low != high:
-                st.markdown(f'**{low:,}원 ~ {high:,}원** (물품별 범위 합계)')
+            st.markdown(f'**{low:,}원 ~ {high:,}원** (물품별 범위 합계)')
             st.caption('법정 감가상각률(법인세법 시행규칙 별표4) 또는 팀 조사 중고 시세에 기반한 예상가격이며, '
                        '실제 거래가격 또는 공인 감정평가액과 다를 수 있습니다.')
             if len(priced) < len(rows):
@@ -557,8 +556,7 @@ def final_page(last):
     table = pd.DataFrame([{k: row.get(k, '') for k in ('집기명', '개수', '연식(년)', '제조사', '모델명')} for row in rows])
     prices = table.copy()
     prices['개당 예상 중고가 (원)'] = [x['mid'] for x in e]
-    prices['개당 범위'] = [('법정 정률법 계산' if x.get('method') == '법정 정률법' else f"{x['low']:,}~{x['high']:,}")
-                       if x['low'] is not None else '' for x in e]
+    prices['개당 범위'] = [f"{x['low']:,}~{x['high']:,}" if x['low'] is not None else '' for x in e]
     prices['합계 (원)'] = [x['mid'] * c if x['mid'] is not None else None for x, c in zip(e, prices['개수'])]
     prices['산정 방식'] = [x.get('method', '') if x['mid'] is not None else '가격 산정 불가' for x in e]
     prices['근거'] = [x.get('law') or ('팀 조사 중고 시세' if x['mid'] is not None else '') for x in e]
@@ -585,6 +583,7 @@ def final_page(last):
             st.markdown('\n'.join(f'- {line}' for line in lines))
         st.caption('산정 방식: 법정 자산 분류가 확인된 품목은 신품가 × (1 − 상각률)^사용연수 '
                    '(정률법, 법인세법 시행령 제26조 · 시행규칙 별표4·5·6, 1년 미만 기간은 월수 비례). '
+                   '범위는 내용연수범위(기준내용연수 ± 25%, 시행령 제28조)의 양 끝 상각률로 계산. '
                    '분류 미확정·신품가 없음·연식 미입력·법정 상각 종료(잔액 ≤ 취득가액 5%) 품목은 팀 조사 중고 시세 중간값. '
                    + reference.NOTICE)
     with st.container(key='page_actions'):

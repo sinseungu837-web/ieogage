@@ -156,11 +156,18 @@ class AgePriceTest(unittest.TestCase):
     def test_confirmed_asset_uses_declining_balance(self):
         e = reference.estimate('의자', '톤', '체어 14', '', 3)   # 신품가 185,000 · 비품 5년
         self.assertEqual(e['method'], '법정 정률법')
-        self.assertEqual((e['low'], e['mid'], e['high']), (31000, 31000, 31000))   # 185,000 × 0.549³ = 30,612
+        # 기준내용연수 5년 0.451 → 30,612 / 범위: 내용연수범위 4년 0.528 → 19,453, 6년 0.394 → 41,170
+        self.assertEqual((e['low'], e['mid'], e['high']), (19000, 31000, 41000))
         self.assertIn('별표4', e['law'])
-        self.assertTrue(any('45.1%' in s and '5년' in s for s in e['calc']))
+        self.assertTrue(any('5년 0.451' in s and '4년 0.528' in s and '6년 0.394' in s for s in e['calc']))
         self.assertTrue(any('185,000 × (1 − 0.451)^3' in s for s in e['calc']))
-        self.assertEqual(reference.estimate('의자', '톤', '체어 14', '', 1)['mid'], 102000)
+        one = reference.estimate('의자', '톤', '체어 14', '', 1)
+        self.assertEqual((one['low'], one['mid'], one['high']), (87000, 102000, 112000))
+        four = reference.estimate('의자', '톤', '체어 14', '', 4)   # 4년 상각률로는 상각 종료 → 하한은 제7항 장부가액
+        self.assertEqual((four['low'], four['mid']), (1000, 17000))
+        self.assertTrue(any('제7항' in s for s in four['calc']))
+        self.assertTrue(any('시행령 제28조 제1항 제2호' in s for s in e['calc']))
+        self.assertTrue(any('미상각잔액' in s for s in e['calc']))
 
     def test_fallbacks_to_survey_mid(self):
         ended = reference.estimate('의자', '톤', '체어 14', '', 5)    # 법정 상각 종료
@@ -182,10 +189,11 @@ class AgePriceTest(unittest.TestCase):
             mapped = {r['item']: r for r in csv.DictReader(f)}
         self.assertEqual(set(mapped), set(reference.items()))
         for r in mapped.values():   # 확인된 품목은 별표4 값만 (5년 0.451, 8년 0.313)
-            if r['confirmed'] == 'Y':
-                self.assertIn((r['life_years'], r['db_rate']), {('5', '0.451'), ('8', '0.313')})
+            key = (r['life_years'], r['db_rate'], r['life_min'], r['rate_short'], r['life_max'], r['rate_long'])
+            if r['confirmed'] == 'Y':   # 별표4: 4년 0.528 · 5년 0.451 · 6년 0.394 / 6년 0.394 · 8년 0.313 · 10년 0.259
+                self.assertIn(key, {('5', '0.451', '4', '0.528', '6', '0.394'), ('8', '0.313', '6', '0.394', '10', '0.259')})
             else:
-                self.assertEqual((r['life_years'], r['db_rate']), ('', ''))
+                self.assertEqual(key, ('',) * 6)
 
     def test_parse_years(self):
         self.assertEqual(reference.parse_years('3년'), 3.0)
