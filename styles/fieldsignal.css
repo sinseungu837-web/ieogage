@@ -79,6 +79,7 @@ iframe[title="box_selector.box_selector"] { border-radius: 18px; border: 1px sol
 [data-testid="stExpander"] details { background: var(--fs-surface); border-color: var(--fs-line); border-radius: 16px; }
 [data-testid="stExpander"] summary { min-height: 48px; }
 .st-key-estimate_summary { background: #FFE4CC; border: 1px solid var(--fs-line); border-radius: 22px; padding: 24px; margin-bottom: 8px; }
+.st-key-estimate_summary [data-testid="stAlertContainer"]:has([data-testid="stAlertContentWarning"]) { background-color: #FFF9F2; }
 .fs-total-label { margin: 0; font-size: 14px; font-weight: 600; color: var(--fs-muted); letter-spacing: -.02em; }
 .stApp .st-key-estimate_summary [data-testid="stMarkdownContainer"] h3 { font-size: clamp(23px, 3.3vw, 36px); line-height: 1.3; color: var(--fs-ink); letter-spacing: -.045em; overflow-wrap: anywhere; }
 .st-key-start_actions, .st-key-page_actions { position: sticky; bottom: 0; z-index: 20; padding: 0; background: transparent; border: 0; box-shadow: none; }
