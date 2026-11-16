@@ -158,7 +158,16 @@ def asset_class(item):
         return None
     if not row or row.get('confirmed') != 'Y':
         return None
-    return {'class': row['asset_class'], 'life': int(row['life_years']), 'rate': float(row['db_rate']), 'law': row['law']}
+    return {'class': row['asset_class'], 'life': int(row['life_years']), 'rate': float(row['db_rate']), 'law': row['law'],
+            # 내용연수범위(기준내용연수 ± 25%, 시행령 제28조 제1항 제2호)의 양 끝 상각률 (별표4)
+            'life_min': int(row['life_min']), 'life_max': int(row['life_max']),
+            'rate_short': float(row['rate_short']), 'rate_long': float(row['rate_long'])}
+
+
+def book_value(new, rate, months):
+    """정률법 미상각잔액(원). 상각 종료 시 시행령 제26조 제7항의 장부가액(취득가액 5%와 1천원 중 적은 금액)."""
+    ratio = declining_balance(rate, months)
+    return min(new * RESIDUAL_RATE, 1000) if ratio is None else new * ratio
 
 
 def declining_balance(rate, months):
@@ -224,17 +233,36 @@ def estimate(name, manufacturer='', model='', spec='', years=None):
             mid, why = survey_mid, f'사용 {months}개월 시점에 법정 상각 종료(잔액 ≤ 취득가액 5%)'
         else:
             mid = _round_won(new * ratio)
-            low = high = mid
-            method, law = '법정 정률법', f"{asset['law']} · 법인세법 시행령 제26조"
+            # 범위: 내용연수범위 양 끝(짧은 연수 = 큰 상각률 → 하한, 긴 연수 = 작은 상각률 → 상한)
+            low = _round_won(book_value(new, asset['rate_short'], months))
+            high = _round_won(book_value(new, asset['rate_long'], months))
+            method, law = '법정 정률법', f"{asset['law']} · 법인세법 시행령 제26조·제28조"
             full, rest = divmod(months, 12)
-            expr = f"{new:,} × (1 − {asset['rate']})^{full}" + (f" × (1 − {asset['rate']} × {rest}/12)" if rest else '')
-            calc = [f"기준: {basis}",
-                    f"신품가: {new:,}원",
-                    f"사용기간: {months}개월 ({full}년" + (f" {rest}개월)" if rest else ")"),
-                    f"법정 자산 분류: {asset['class']} · 기준내용연수 {asset['life']}년 · 정률법 상각률 {asset['rate'] * 100:.1f}%",
-                    f"계산식: {expr}",
-                    f"예상가격: 약 {mid:,}원",
-                    f"근거: {law}"]
+
+            def expr(r):
+                return f"{new:,} × (1 − {r})^{full}" + (f" × (1 − {r} × {rest}/12)" if rest else '')
+            short_end = declining_balance(asset['rate_short'], months) is None
+            calc = [
+                f"기준 제품: {basis}",
+                f"취득가액(신품가): {new:,}원",
+                f"경과기간: {months}개월 ({full}년" + (f" {rest}개월)" if rest else ")") + " — 1월 미만의 일수는 1월로 계산 (법인세법 시행령 제26조 제9항)",
+                f"자산 구분: {asset['class']} — 법인세법 시행규칙 [별표 5] 구분 1 '공구, 기구, 금형 및 비품'",
+                f"기준내용연수 {asset['life']}년, 내용연수범위 {asset['life_min']}~{asset['life_max']}년 — "
+                "'기준내용연수에 그 기준내용연수의 100분의 25를 가감'한 범위 (법인세법 시행령 제28조 제1항 제2호)",
+                "상각방법: 정률법 — 미상각잔액(취득가액에서 이미 감가상각비로 손금에 산입한 금액을 공제한 잔액)'에 해당 자산의 "
+                "내용연수에 따른 상각률을 곱하여 계산한 각 사업연도의 상각범위액이 매년 체감되는 상각방법' (법인세법 시행령 제26조 제2항 제2호)",
+                f"상각률 (법인세법 시행규칙 [별표 4] 감가상각자산의 상각률표, 정률법): "
+                f"{asset['life_min']}년 {asset['rate_short']} · {asset['life']}년 {asset['rate']} · {asset['life_max']}년 {asset['rate_long']}",
+                "산출식: 미상각잔액 = 취득가액 × (1 − 상각률)^경과연수" + (" × (1 − 상각률 × 잔여월수 ÷ 12)" if rest else ""),
+                f"예상가격(기준내용연수 {asset['life']}년): {expr(asset['rate'])} = 약 {mid:,}원",
+                f"범위 상한(내용연수 {asset['life_max']}년): {expr(asset['rate_long'])} = 약 {high:,}원",
+                f"범위 하한(내용연수 {asset['life_min']}년): "
+                + (f"{asset['life_min']}년 기준으로는 상각 종료 → 장부가액 취득가액의 5%와 1천원 중 적은 금액 = {low:,}원 (같은 조 제7항)"
+                   if short_end else f"{expr(asset['rate_short'])} = 약 {low:,}원"),
+                "잔존가액: 정률법은 '취득가액의 100분의 5'를 잔존가액으로 하여 미상각잔액이 최초로 취득가액의 100분의 5 이하가 되는 "
+                "사업연도에 상각을 마치며, 이후 장부가액은 '취득가액의 100분의 5와 1천원중 적은 금액' (법인세법 시행령 제26조 제6항·제7항)",
+                f"유의: 세법상 감가상각자산의 미상각잔액(장부가액) 계산 방식을 중고 예상가격에 준용한 것입니다. {NOTICE}",
+            ]
     if method == '조사 시세 중간값':
         calc.append(f"{why} → 조사 중고 시세 중간값 ({low:,} + {high:,}) ÷ 2 = {survey_mid:,}원")
         calc.append(f"근거: {DATA_BASIS}")
