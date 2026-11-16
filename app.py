@@ -562,7 +562,7 @@ def final_page(last):
     with st.expander('가격 근거 보기'):
         for r, x in zip(rows, e):
             st.markdown(f"**{r['집기명']} · {r.get('제조사', '')} {r.get('모델명', '')}**".strip())
-            lines = list(x.get('calc') or [x['source']])
+            lines = [line.split(' · 상태 기준:', 1)[0] for line in (x.get('calc') or [x['source']])]
             if r.get('연식 근거'):
                 lines.insert(0, f"연식 {r['연식(년)']}년 ({r['연식 근거']})")
             st.markdown('\n'.join(f'- {line}' for line in lines))
