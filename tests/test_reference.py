@@ -36,7 +36,7 @@ class ReferenceEstimateTest(unittest.TestCase):
         self.assertIn('시세표에 없는', got['source'])
 
     def test_single_row_passes_display_check(self):
-        out = normalize_estimate('제빙기', reference.estimate('제빙기', '아이스트로'))  # 제조사당 1모델
+        out = normalize_estimate('제빙기', reference.estimate('제빙기', '스카츠맨'))  # 제조사당 1모델 (아이스트로는 2026-11-16 ICI-100 추가로 2모델)
         self.assertEqual(out['n'], 1)
         self.assertIsNotNone(out['mid'])
         self.assertTrue(out['low'] <= out['mid'] <= out['high'])
@@ -133,27 +133,51 @@ class CountModeTest(unittest.TestCase):
 
 class AgePriceTest(unittest.TestCase):
     """시세 범위 + 연식 위치 (2026-11-15 팀 확정 데이터 기준)."""
-    def test_position_in_range(self):
-        self.assertEqual(reference.position_by_age(2000000, 2800000, 1)[:3], (2800000, 2000000, 2800000))
-        self.assertEqual(reference.position_by_age(2000000, 2800000, 3)[0], 2400000)
-        self.assertEqual(reference.position_by_age(2000000, 2800000, 5)[0], 2000000)
+    def test_straight_line_over_five_years(self):
+        # 정액법: 상한에서 60개월 동안 균등하게 하한까지 (2026-11-16 법령 기반 공식)
+        self.assertEqual(reference.position_by_age(9500000, 11500000, 1)[0], 11100000)
+        self.assertEqual(reference.position_by_age(9500000, 11500000, 3)[0], 10300000)
+        self.assertEqual(reference.position_by_age(9500000, 11500000, 0.5)[0], 11300000)
+        self.assertEqual(reference.position_by_age(9500000, 11500000, 13 / 12)[0], 11067000)
 
-    def test_over_five_years_and_floor(self):
-        mid, low, high, _ = reference.position_by_age(2000000, 2800000, 8, new_price=4850000)
-        self.assertEqual(mid, 1400000)            # 하단 200만 × (1 - 0.1×3)
-        self.assertTrue(low <= mid <= high)
-        self.assertEqual(reference.position_by_age(2000000, 2800000, 30, new_price=4850000)[0], 485000)  # 신품가 10%
+    def test_month_rounding_and_stop_after_five_years(self):
+        # 1개월 미만은 1개월
+        self.assertEqual(reference.months_of(0.01), 1)
+        self.assertEqual(reference.months_of(1.0), 12)
+        # 5년 이상은 하한에서 멈춤, 신품가는 쓰지 않음
+        for y in (5, 8, 30):
+            mid, low, high, note = reference.position_by_age(2000000, 2800000, y, new_price=4850000)
+            self.assertEqual((mid, low, high), (2000000, 2000000, 2800000))
+            self.assertIn('감가 종료', note)
 
     def test_parse_years(self):
         self.assertEqual(reference.parse_years('3년'), 3.0)
         self.assertEqual(reference.parse_years('1년 미만'), 0.5)
+        self.assertEqual(reference.parse_years('1년 1개월') * 12, 13)
+        self.assertEqual(reference.parse_years('8개월') * 12, 8)
         self.assertIsNone(reference.parse_years(''))
 
     def test_estimate_with_years_has_range_and_calc(self):
         e = reference.estimate('커피머신', '훼마', 'E98 UP', '', 3)
-        self.assertEqual((e['low'], e['mid'], e['high']), (2000000, 2400000, 2800000))
-        self.assertTrue(any('비례 위치' in s for s in e['calc']))
+        self.assertEqual((e['low'], e['mid'], e['high']), (2000000, 2320000, 2800000))
+        self.assertTrue(any('정액법' in s for s in e['calc']))
         self.assertTrue(any('근거' in s for s in e['calc']))
+
+    def test_user_maker_model_matches_table_product(self):
+        # 물품명이 시세표에 없어도 제조사+모델이 맞으면 그 제품 시세 (2026-11-16)
+        e = reference.estimate('주방기기', '훼마', 'E98 UP', '', 3)
+        self.assertEqual((e['low'], e['mid'], e['high']), (2000000, 2320000, 2800000))
+        self.assertIn('동일 제품', e['match'])
+        # AI 가 다른 품목으로 잡았어도 입력 모델 우선 (그라인더로 잡힌 훼마 머신)
+        self.assertEqual(reference.estimate('커피 그라인더', 'FAEMA', 'E98 UP 2GR')['n'], 1)
+        # 가까운 모델 우선: E65S 입력이 E65S GbW 로 가지 않음
+        self.assertEqual(reference.find_product('말코닉', 'E65S')[0]['model'], 'E65S')
+        # 영문 별칭도 매칭
+        self.assertEqual(reference.find_product('Mahlkonig', 'EK43S')[0]['model'], 'EK43S')
+        # 제조사나 모델 하나만 있으면 품목 밖 매칭 안 함
+        self.assertIsNone(reference.estimate('화분', '훼마', ''))
+        self.assertIsNone(reference.estimate('화분', '', 'E98 UP'))
+        self.assertIsNone(reference.estimate('화분', '없는회사', 'E98 UP'))
 
     def test_new_items_priced(self):
         for name in ('포스기', '키오스크', 'TV', '식기세척기', '에어컨', '싱크대'):

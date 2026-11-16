@@ -130,7 +130,7 @@ def quote_request(rows, estimates):
         years = str(r.get('연식(년)', '')).strip()
         price = f" / 참고 중고가 개당 {e['mid']:,}원" if e.get('mid') else ''
         lines.append(f"- {r['집기명']}{' (' + ident + ')' if ident else ''} {r['개수']}개"
-                     f"{' / 사용 ' + years + '년' if years else ''}{price}")
+                     f"{' / 사용 ' + years + ('' if '년' in years or '개월' in years else '년') if years else ''}{price}")
     lines += ['', '확인하고 싶은 점:', '1. 철거·운반 비용이 매입가에 포함되나요?',
               '2. 매입가는 어떤 기준으로 정하시나요? (연식·상태·브랜드)',
               '3. 방문 견적과 수거 가능한 날짜는 언제인가요?', '', '사진은 별도로 보내 드리겠습니다.']

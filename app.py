@@ -12,6 +12,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 import llm
 import price
+import reference
 import vision
 
 from box_selector import select_box, validated_box
@@ -452,7 +453,7 @@ def edit_inventory_table(last):
                            key=f"opened_{last['key']}")
     last['opened_at'] = opened
     if opened:
-        st.caption(f'연식을 비워 둔 물품은 개업일 기준 {opening_years(last):g}년으로 계산합니다.')
+        st.caption(f'연식을 비워 둔 물품은 개업일 기준 {years_text(opening_years(last))}으로 계산합니다.')
     def refresh_photo_layout():
         # 사진 펼침으로 표 위치가 바뀌면 편집기의 클릭 좌표도 다시 계산한다.
         last['table_revision'] = last.get('table_revision', 0) + 1
@@ -472,10 +473,17 @@ def edit_inventory_table(last):
                    column_config={'집기명': st.column_config.TextColumn('물품명', required=True, width=66),
                                   '개수': st.column_config.NumberColumn(min_value=1, step=1, format='%d개', width=50),
                                   '연식(년)': st.column_config.TextColumn('연식', width=58,
-                                                                        help='몇 년 사용했는지 숫자 (1년 미만은 0.5). 비우면 개업일 기준'),
+                                                                        help='사용 기간. 예: 3, 1년 1개월, 8개월. 비우면 개업일 기준'),
                                   '제조사': st.column_config.TextColumn(width=80),
                                   '모델명': st.column_config.TextColumn()})
     st.caption('표 안의 내용을 눌러 직접 수정할 수 있습니다.')
+
+
+def years_text(years):
+    """7.0833 → '7년 1개월' (reference.parse_years 가 다시 읽을 수 있는 형식)."""
+    months = round(years * 12)
+    y, m = divmod(months, 12)
+    return f'{y}년 {m}개월' if y and m else (f'{y}년' if y else f'{m}개월')
 
 
 def opening_years(last):
@@ -483,7 +491,10 @@ def opening_years(last):
     if not opened:
         return None
     import datetime as _dt
-    return max(0.5, round((_dt.date.today() - opened).days / 365, 1))
+    today = _dt.date.today()
+    # 개월 수 (남는 날이 있으면 1개월로 올림, 법인세법 시행령 제26조 제9항)
+    months = (today.year - opened.year) * 12 + today.month - opened.month + (1 if today.day > opened.day else 0)
+    return round(max(1, months) / 12, 4)
 
 
 def priced_rows(last):
@@ -492,7 +503,7 @@ def priced_rows(last):
     years = opening_years(last)
     for r in rows:
         if not str(r.get('연식(년)', '')).strip() and years is not None:
-            r['연식(년)'] = f'{years:g}'
+            r['연식(년)'] = years_text(years)
             r['연식 근거'] = '개업일 기준'
     return rows, fixed, supplies
 
@@ -509,6 +520,9 @@ def disposal_rows(last):
     category = {it['name']: it.get('category', '집기') for it in last.get('result', {}).get('items', [])}
     for r in all_rows:
         r['분류'] = category.get(r['집기명'], '집기')
+        # 사용자가 입력한 제조사·모델이 시세표 제품과 맞으면 '기타'로 잡혔어도 가격을 낸다 (2026-11-16)
+        if r['분류'] in ('재고·소모품', '기타') and reference.find_product(r.get('제조사', ''), r.get('모델명', '')):
+            r['분류'] = '집기'
     # 고정 설비(카운터·하부장·천장형 에어컨 등)는 떼어 팔기 어려워 최종 견적에서 제외
     fixed = [r for r in all_rows if r['분류'] == '고정 설비']
     # 재고·소모품·장식은 가격 조회 없이 '묶음 1건'으로 따로 표시 (총액 제외)
@@ -564,11 +578,12 @@ def final_page(last):
             st.markdown(f"**{r['집기명']} · {r.get('제조사', '')} {r.get('모델명', '')}**".strip())
             lines = list(x.get('calc') or [x['source']])
             if r.get('연식 근거'):
-                lines.insert(0, f"연식 {r['연식(년)']}년 ({r['연식 근거']})")
+                lines.insert(0, f"연식 {r['연식(년)']} ({r['연식 근거']})")
             st.markdown('\n'.join(f'- {line}' for line in lines))
-        st.caption('산정 방식: 모델별 중고 시세 범위를 기본으로, 연식 1년 이하는 범위 상단·5년은 하단·그 사이는 비례 위치, '
-                   '5년 초과는 하단에서 해마다 10%씩 추가 하락(최저 신품가의 10%). 5년 기준: 법인세법 시행규칙 [별표5] 기구 및 비품 기준내용연수. '
-                   '시세는 팀 조사 추정값이며 개별 매물 원문 링크는 없습니다.')
+        st.caption('산정 방식: 개당 가격 = 상한 − (상한 − 하한) × 사용 개월 ÷ 60, 5년 이상은 하한. '
+                   '근거: 거래사례(중고 시세) 기준 평가 — 감정평가 실무기준 630 기계기구류 1.3②, '
+                   '기구·비품 기준내용연수 5년·정액법·월할 계산·내용연수 경과 후 감가 종료 — 법인세법 시행령 제26조·제28조. '
+                   '세법의 감가 방식을 팀 조사 중고 시세 범위에 적용한 참고 시세이며, 개별 매물 원문 링크는 없습니다.')
     with st.container(key='page_actions'):
         left, right = st.columns(2)
         if left.button('← 이전 화면', use_container_width=True):
