@@ -55,20 +55,6 @@ def get_vision():
     return vision.load_model()
 
 
-def load_prices() -> pd.DataFrame:
-    f = BASE / "data" / "price_table.csv"
-    return pd.read_csv(f) if f.exists() else pd.DataFrame()
-
-
-def search_links(name: str) -> dict:
-    q = urllib.parse.quote(name)
-    return {
-        "당근": f"https://www.daangn.com/kr/buy-sell/?search={q}",
-        "번개장터": f"https://m.bunjang.co.kr/search/products?q={q}",
-        "중고나라": f"https://web.joongna.com/search/{q}",
-    }
-
-
 FONT_CANDIDATES = [  # Windows(노트북) / Linux(배포 서버) / macOS(맥북 한글 폰트 추가)
     "/System/Library/Fonts/AppleSDGothicNeo.ttc",
     "C:/Windows/Fonts/malgunbd.ttf", "C:/Windows/Fonts/malgun.ttf",
